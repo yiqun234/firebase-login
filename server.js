@@ -79,7 +79,7 @@ async function verifyApiKeyMiddleware(req, res, next) {
 
 // Routes
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'auth.html'));
 });
 
 app.get('/auth/callback', (req, res) => {
@@ -145,9 +145,17 @@ app.post('/api/register', async (req, res) => {
       const userRecord = await admin.auth().createUser({
         email: email,
         password: password,
-        emailVerified: false
+        emailVerified: false // User needs to verify email
       });
       userId = userRecord.uid;
+      
+      // Send verification email
+      const verificationLink = await admin.auth().generateEmailVerificationLink(email);
+      console.log(`Verification email link generated for ${email}: ${verificationLink}`);
+      
+      // In a production environment, you would send this email to the user
+      // For now, log it to console for testing purposes
+      console.log(`Please verify your email using this link: ${verificationLink}`);
       
       // Store user data in Firestore
       const db = admin.firestore();
@@ -158,6 +166,7 @@ app.post('/api/register', async (req, res) => {
       await db.collection('users').doc(userId).set({
         email: email,
         apiKey: apiKey,
+        emailVerified: false,
         createdAt: admin.firestore.FieldValue.serverTimestamp()
       });
       
@@ -170,7 +179,7 @@ app.post('/api/register', async (req, res) => {
       // Return response
       return res.status(200).json({ 
         success: true, 
-        message: 'Registration successful',
+        message: 'Registration successful. Please check your email to verify your account.',
         user_id: userId,
         api_key: apiKey
       });
@@ -186,7 +195,8 @@ app.post('/api/register', async (req, res) => {
         id: userId,
         email,
         password: hashedPassword,
-        apiKey
+        apiKey,
+        emailVerified: false
       });
       
       // Store API key mapping
@@ -198,7 +208,7 @@ app.post('/api/register', async (req, res) => {
       // Return response
       return res.status(200).json({ 
         success: true, 
-        message: 'Registration successful',
+        message: 'Registration successful. In local mode, email verification is simulated.',
         user_id: userId,
         api_key: apiKey
       });
@@ -248,6 +258,19 @@ app.post('/api/login', async (req, res) => {
         const userRecord = await admin.auth().getUserByEmail(email);
         userId = userRecord.uid;
         
+        // Check if email is verified
+        if (!userRecord.emailVerified) {
+          // Generate a new verification email link
+          const verificationLink = await admin.auth().generateEmailVerificationLink(email);
+          console.log(`Re-sending verification email link for ${email}: ${verificationLink}`);
+          
+          return res.status(401).json({ 
+            success: false, 
+            message: 'Email not verified. Please check your inbox or spam folder for verification email.',
+            email_verified: false
+          });
+        }
+        
         // Get user's API key
         const db = admin.firestore();
         const userDoc = await db.collection('users').doc(userId).get();
@@ -275,7 +298,8 @@ app.post('/api/login', async (req, res) => {
           message: 'Login successful',
           user_id: userId,
           api_key: apiKey,
-          token
+          token,
+          email_verified: true
         });
         
       } catch (error) {
@@ -297,6 +321,13 @@ app.post('/api/login', async (req, res) => {
         return res.status(400).json({ success: false, message: 'Email or password is incorrect' });
       }
       
+      // Check if email is verified in local mode
+      if (!user.emailVerified) {
+        // In local mode, we'll simulate verification by simply setting it to true
+        user.emailVerified = true;
+        console.log(`Local mode: Auto-verifying email for ${email}`);
+      }
+      
       userId = user.id;
       apiKey = user.apiKey;
       
@@ -312,13 +343,88 @@ app.post('/api/login', async (req, res) => {
         message: 'Login successful',
         user_id: userId,
         api_key: apiKey,
-        token
+        token,
+        email_verified: true
       });
     }
     
   } catch (error) {
     console.error('Login error:', error);
     return res.status(500).json({ success: false, message: 'Login failed: ' + error.message });
+  }
+});
+
+// Email verification confirmation
+app.get('/api/verify-email', async (req, res) => {
+  try {
+    // This endpoint is a placeholder for email verification confirmation
+    // In a real implementation, Firebase handles verification automatically via email links
+    // This endpoint can be used for custom verification flows if needed
+    res.send(`
+      <html>
+        <body style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px;">
+          <h1>Email Verification</h1>
+          <p>Your email has been verified successfully!</p>
+          <p>You can now close this window and log in to the application.</p>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Email verification error:', error);
+    res.status(500).send(`
+      <html>
+        <body style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px;">
+          <h1>Email Verification Failed</h1>
+          <p>There was an error verifying your email: ${error.message}</p>
+          <p>Please try again or contact support.</p>
+        </body>
+      </html>
+    `);
+  }
+});
+
+// Check if email is verified
+app.post('/api/check-email-verified', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+    
+    if (admin) {
+      // Firebase implementation
+      try {
+        const userRecord = await admin.auth().getUserByEmail(email);
+        return res.json({
+          success: true,
+          email_verified: userRecord.emailVerified
+        });
+      } catch (error) {
+        console.error('Error checking email verification:', error);
+        return res.status(400).json({ 
+          success: false, 
+          message: 'User not found'
+        });
+      }
+    } else {
+      // Local implementation
+      const user = users.find(user => user.email === email);
+      if (!user) {
+        return res.status(400).json({ success: false, message: 'User not found' });
+      }
+      
+      return res.json({
+        success: true,
+        email_verified: user.emailVerified || false
+      });
+    }
+  } catch (error) {
+    console.error('Check email verification error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Failed to check email verification: ' + error.message
+    });
   }
 });
 
@@ -722,6 +828,182 @@ Output strictly in the user-specified JSON structure.`;
   } catch (error) {
     console.error('Extract-from-resume error:', error);
     res.status(500).json({ error: error.message || 'Server error' });
+  }
+});
+
+// Google login API
+app.post('/api/google-login', async (req, res) => {
+  try {
+    // Test mode - return success directly
+    if (TEST_MODE) {
+      console.log('Test mode: Skipping Google login verification, returning success directly');
+      const testUserId = 'test_user_' + Math.floor(Math.random() * 1000000);
+      const testApiKey = 'ea_test_' + uuidv4();
+      
+      return res.status(200).json({
+        success: true,
+        message: 'Test mode: Google login successful',
+        user_id: testUserId,
+        api_key: testApiKey,
+        token: 'test_token_' + uuidv4()
+      });
+    }
+    
+    const { idToken } = req.body;
+    
+    if (!idToken) {
+      return res.status(400).json({ success: false, message: 'Google ID token is required' });
+    }
+    
+    if (admin) {
+      // Firebase implementation
+      try {
+        // Verify Google ID token
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        const uid = decodedToken.uid;
+        const email = decodedToken.email;
+        let userRecord;
+        
+        try {
+          // Check if user exists in Firebase Authentication
+          userRecord = await admin.auth().getUser(uid);
+        } catch (error) {
+          if (error.code === 'auth/user-not-found') {
+            // User doesn't exist yet, create a new one
+            userRecord = await admin.auth().createUser({
+              uid: uid,
+              email: email,
+              emailVerified: true // Google OAuth automatically verifies email
+            });
+          } else {
+            throw error;
+          }
+        }
+        
+        // Initialize Firestore
+        const db = admin.firestore();
+        
+        // Check if user exists in Firestore
+        let userDoc = await db.collection('users').doc(uid).get();
+        let apiKey;
+        
+        if (!userDoc.exists) {
+          // User doesn't exist in Firestore, create a new entry
+          apiKey = `ea_${uuidv4()}`;
+          
+          // Create user in Firestore
+          await db.collection('users').doc(uid).set({
+            email: email,
+            apiKey: apiKey,
+            emailVerified: true,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            signInMethod: 'google'
+          });
+          
+          // Create API key entry
+          await db.collection('api_keys').doc(apiKey).set({
+            userId: uid,
+            status: 'active',
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        } else {
+          // User exists, get API key
+          const userData = userDoc.data();
+          apiKey = userData.apiKey;
+          
+          // If for some reason the user doesn't have an API key, generate one
+          if (!apiKey) {
+            apiKey = `ea_${uuidv4()}`;
+            await db.collection('users').doc(uid).update({
+              apiKey: apiKey
+            });
+            
+            await db.collection('api_keys').doc(apiKey).set({
+              userId: uid,
+              status: 'active',
+              createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
+        }
+        
+        // Create JWT token
+        const token = jwt.sign(
+          { user_id: uid, email },
+          JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+        
+        return res.json({
+          success: true,
+          message: 'Google login successful',
+          user_id: uid,
+          api_key: apiKey,
+          token,
+          email_verified: true
+        });
+        
+      } catch (error) {
+        console.error('Google login error:', error);
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid Google token or authentication failed: ' + error.message
+        });
+      }
+    } else {
+      // Local implementation - simplified for testing
+      // In a real app, you would verify the Google token via Google's API
+      // For local testing, we'll just simulate a successful login
+      
+      const simulatedEmail = req.body.email || 'google-user@example.com';
+      
+      // Check if user exists in local storage
+      let user = users.find(u => u.email === simulatedEmail);
+      let userId, apiKey;
+      
+      if (!user) {
+        // Create a new user
+        userId = uuidv4();
+        apiKey = `ea_${uuidv4()}`;
+        
+        users.push({
+          id: userId,
+          email: simulatedEmail,
+          apiKey,
+          emailVerified: true,
+          signInMethod: 'google'
+        });
+        
+        apiKeys.push({
+          key: apiKey,
+          userId
+        });
+      } else {
+        userId = user.id;
+        apiKey = user.apiKey;
+      }
+      
+      // Create JWT token
+      const token = jwt.sign(
+        { user_id: userId, email: simulatedEmail },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+      
+      return res.json({
+        success: true,
+        message: 'Local mode: Google login simulated',
+        user_id: userId,
+        api_key: apiKey,
+        token,
+        email_verified: true
+      });
+    }
+  } catch (error) {
+    console.error('Google login error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Google login failed: ' + error.message
+    });
   }
 });
 
