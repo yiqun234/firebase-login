@@ -12,7 +12,7 @@ if pm2 list | grep -q "firebase-login"; then
   pm2 restart firebase-login
 else
   echo "Starting new FIREBASE LOGIN service..."
-  pm2 start app.js --name firebase-login
+  pm2 start server.js --name firebase-login
 fi
 
 # 保存PM2进程列表
