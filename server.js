@@ -227,15 +227,17 @@ app.post('/api/login', async (req, res) => {
         userEmail = decodedToken.email || null; // Explicitly set to null if undefined
         const signInProvider = decodedToken.firebase.sign_in_provider;
         
-        // For Google sign-in, email is typically already verified by Google.
-        // If you have specific policies for your app even for verified emails, check them here.
-        if (!decodedToken.email_verified) {
-          // This block might be less common for Google sign-ins but good to have for consistency
-          return res.status(401).json({ 
-            success: false, 
-            message: 'Email not verified. Please ensure your Google account email is accessible and verified.',
-            email_verified: false
-          });
+        // Check email verification ONLY IF the user is NOT anonymous
+        if (signInProvider !== 'anonymous') {
+          if (!decodedToken.email_verified) {
+            // This block is for non-anonymous users (e.g., email/password, Google) whose email is not verified.
+            // The message might need to be more generic if you support other email-based providers.
+            return res.status(401).json({ 
+              success: false, 
+              message: 'Email not verified. Please check your email for a verification link.',
+              email_verified: false
+            });
+          }
         }
         
         const db = admin.firestore();
