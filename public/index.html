@@ -1,11 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Authentication - EasyApply</title>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -96,6 +94,11 @@
             border: 1px solid #ebccd1;
             color: #a94442;
         }
+        .alert-info {
+            background-color: #d9edf7;
+            border: 1px solid #bce8f1;
+            color: #31708f;
+        }
         .verification-message {
             text-align: center;
             margin: 20px 0;
@@ -112,62 +115,48 @@
         <h1>EasyApply Authentication</h1>
         
         <div class="tabs">
-            <div class="tab active" data-tab="login">Login</div>
-            <div class="tab" data-tab="register">Register</div>
+            <div class="tab active" data-tab="login">登录</div>
+            <div class="tab" data-tab="register">注册</div>
         </div>
         
         <div id="verification-message" class="verification-message" style="display: none;">
-            Please check your email to verify your account. You must verify your email before logging in.
+            请检查您的邮箱以验证您的账户。您必须先验证邮箱才能登录。
         </div>
         
         <div id="login-tab" class="tab-content active">
             <div class="form-group">
-                <label for="login-email">Email</label>
+                <label for="login-email">电子邮箱</label>
                 <input type="email" id="login-email" placeholder="your@email.com">
             </div>
             <div class="form-group">
-                <label for="login-password">Password</label>
-                <input type="password" id="login-password" placeholder="Your password">
+                <label for="login-password">密码</label>
+                <input type="password" id="login-password" placeholder="您的密码">
             </div>
-            <button id="login-btn">Login</button>
-            <button id="google-login-btn" class="google-btn">Login with Google</button>
+            <button id="login-btn">登录</button>
+            <button id="google-login-btn" class="google-btn">使用Google登录</button>
             <div id="login-status"></div>
         </div>
         
         <div id="register-tab" class="tab-content">
             <div class="form-group">
-                <label for="register-email">Email</label>
+                <label for="register-email">电子邮箱</label>
                 <input type="email" id="register-email" placeholder="your@email.com">
             </div>
             <div class="form-group">
-                <label for="register-password">Password</label>
-                <input type="password" id="register-password" placeholder="Minimum 6 characters">
+                <label for="register-password">密码</label>
+                <input type="password" id="register-password" placeholder="至少6个字符">
             </div>
             <div class="form-group">
-                <label for="confirm-password">Confirm Password</label>
-                <input type="password" id="confirm-password" placeholder="Confirm your password">
+                <label for="confirm-password">确认密码</label>
+                <input type="password" id="confirm-password" placeholder="确认您的密码">
             </div>
-            <button id="register-btn">Register</button>
+            <button id="register-btn">注册</button>
             <div id="register-status"></div>
         </div>
     </div>
 
     <script>
-        // Your Firebase config - replace with your own Firebase project config
-        const firebaseConfig = {
-          apiKey: "AIzaSyAeHptX0vuZVy1Oos_LyOSjtoVTU4b6m9s",
-          authDomain: "easy-apply-bot.firebaseapp.com",
-          projectId: "easy-apply-bot",
-          storageBucket: "easy-apply-bot.firebasestorage.app",
-          messagingSenderId: "40362191929",
-          appId: "1:40362191929:web:cbfec3cafe37f6e85f31e8",
-          measurementId: "G-B4JTE653K5"
-        };
-        
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        
-        // DOM elements
+        // DOM元素
         const tabs = document.querySelectorAll('.tab');
         const tabContents = document.querySelectorAll('.tab-content');
         const loginBtn = document.getElementById('login-btn');
@@ -177,244 +166,257 @@
         const registerStatus = document.getElementById('register-status');
         const verificationMessage = document.getElementById('verification-message');
         
-        // Tab switching
+        // 获取回调URL参数
+        function getCallbackUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('callback');
+        }
+        
+        // 处理认证成功后的回调
+        function handleAuthSuccess(user_id, api_key) {
+            const callbackUrl = getCallbackUrl();
+            if (callbackUrl) {
+                // 如果有回调URL，重定向到callback页面
+                window.location.href = `/auth/callback?user_id=${user_id}&api_key=${api_key}`;
+            } else {
+                // 如果没有回调URL，直接返回首页
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 1500);
+            }
+        }
+        
+        // 标签切换
         tabs.forEach(tab => {
             tab.addEventListener('click', () => {
                 const tabId = tab.getAttribute('data-tab');
                 
-                // Remove active class from all tabs and contents
+                // 移除所有标签和内容的active类
                 tabs.forEach(t => t.classList.remove('active'));
                 tabContents.forEach(c => c.classList.remove('active'));
                 
-                // Add active class to clicked tab and corresponding content
+                // 为点击的标签和相应内容添加active类
                 tab.classList.add('active');
                 document.getElementById(`${tabId}-tab`).classList.add('active');
                 
-                // Hide verification message when switching tabs
+                // 切换标签时隐藏验证消息
                 verificationMessage.style.display = 'none';
                 
-                // Clear status messages
+                // 清除状态消息
                 loginStatus.innerHTML = '';
                 registerStatus.innerHTML = '';
             });
         });
         
-        // Login with email/password
+        // 登录
         loginBtn.addEventListener('click', async () => {
             const email = document.getElementById('login-email').value.trim();
             const password = document.getElementById('login-password').value;
             
+            // 简单的前端验证
             if (!email || !password) {
-                loginStatus.innerHTML = '<div class="alert alert-danger">Email and password cannot be empty</div>';
+                loginStatus.innerHTML = '<div class="alert alert-danger">电子邮箱和密码不能为空</div>';
                 return;
             }
             
+            loginStatus.innerHTML = '<div class="alert alert-info">正在登录...</div>';
+            
             try {
-                // Try Firebase Authentication first
-                try {
-                    // Sign in with Firebase Auth
-                    const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
-                    const user = userCredential.user;
-                    
-                    // Check if email is verified
-                    if (!user.emailVerified) {
-                        // Send verification email again
-                        await user.sendEmailVerification();
-                        loginStatus.innerHTML = '<div class="alert alert-danger">Email not verified. We\'ve sent another verification email.</div>';
+                // 发送登录请求到后端，后端负责处理所有身份验证逻辑
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email,
+                        password,
+                        callback: getCallbackUrl() // 传递回调URL
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    // 检查邮箱是否已验证
+                    if (data.email_verified === false) {
+                        loginStatus.innerHTML = '<div class="alert alert-danger">邮箱未验证。请检查您的收件箱，我们已发送新的验证邮件。</div>';
                         verificationMessage.style.display = 'block';
                         return;
                     }
                     
-                    // Get ID token for backend authentication
-                    const idToken = await user.getIdToken();
-                    
-                    // Store token in local storage
-                    localStorage.setItem('auth_token', idToken);
-                    localStorage.setItem('user_email', user.email);
-                    
-                    loginStatus.innerHTML = '<div class="alert alert-success">Login successful! Redirecting...</div>';
-                    
-                    // Redirect or proceed with the application
-                    setTimeout(() => {
-                        window.location.href = '/';
-                    }, 1500);
-                    
-                } catch (firebaseError) {
-                    console.error('Firebase auth error:', firebaseError);
-                    
-                    // Fall back to our backend API
-                    const response = await fetch('/api/login', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            email,
-                            password
-                        }),
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (response.ok && data.success) {
-                        // Check if email is verified
-                        if (data.email_verified === false) {
-                            loginStatus.innerHTML = '<div class="alert alert-danger">Email not verified. Please check your inbox.</div>';
-                            verificationMessage.style.display = 'block';
-                            return;
-                        }
-                        
-                        // Store auth data
-                        localStorage.setItem('auth_token', data.token);
-                        localStorage.setItem('user_id', data.user_id);
-                        localStorage.setItem('api_key', data.api_key);
-                        
-                        loginStatus.innerHTML = '<div class="alert alert-success">Login successful! Redirecting...</div>';
-                        
-                        // Redirect
-                        setTimeout(() => {
-                            window.location.href = '/';
-                        }, 1500);
-                    } else {
-                        loginStatus.innerHTML = `<div class="alert alert-danger">${data.message || 'Login failed'}</div>`;
-                    }
+                    loginStatus.innerHTML = '<div class="alert alert-success">登录成功！正在重定向...</div>';
+                    handleAuthSuccess(data.user_id, data.api_key);
+                } else {
+                    loginStatus.innerHTML = `<div class="alert alert-danger">${data.message || '登录失败，请检查您的邮箱和密码'}</div>`;
                 }
             } catch (error) {
-                console.error('Login error:', error);
-                loginStatus.innerHTML = `<div class="alert alert-danger">Login failed: ${error.message}</div>`;
+                console.error('登录错误:', error);
+                loginStatus.innerHTML = '<div class="alert alert-danger">登录服务暂时不可用，请稍后再试</div>';
             }
         });
         
-        // Register with email/password
+        // 注册
         registerBtn.addEventListener('click', async () => {
             const email = document.getElementById('register-email').value.trim();
             const password = document.getElementById('register-password').value;
             const confirmPassword = document.getElementById('confirm-password').value;
             
-            if (!email || !password) {
-                registerStatus.innerHTML = '<div class="alert alert-danger">Email and password cannot be empty</div>';
+            // 简单的前端验证
+            if (!email) {
+                registerStatus.innerHTML = '<div class="alert alert-danger">请输入有效的电子邮箱</div>';
                 return;
             }
             
-            if (password.length < 6) {
-                registerStatus.innerHTML = '<div class="alert alert-danger">Password must be at least 6 characters</div>';
+            if (!password) {
+                registerStatus.innerHTML = '<div class="alert alert-danger">请输入密码</div>';
                 return;
             }
             
             if (password !== confirmPassword) {
-                registerStatus.innerHTML = '<div class="alert alert-danger">Passwords do not match</div>';
+                registerStatus.innerHTML = '<div class="alert alert-danger">两次输入的密码不一致</div>';
                 return;
             }
             
+            registerStatus.innerHTML = '<div class="alert alert-info">正在注册...</div>';
+            
             try {
-                // Try Firebase Authentication first
-                try {
-                    // Create user with Firebase Auth
-                    const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
-                    const user = userCredential.user;
-                    
-                    // Send verification email
-                    await user.sendEmailVerification();
-                    
-                    registerStatus.innerHTML = '<div class="alert alert-success">Registration successful! Please check your email to verify your account.</div>';
+                // 发送注册请求到后端，后端负责处理所有身份验证和用户创建逻辑
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email,
+                        password,
+                        confirmPassword,
+                        callback: getCallbackUrl() // 传递回调URL
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    registerStatus.innerHTML = '<div class="alert alert-success">注册成功！请检查您的邮箱以验证您的账户。</div>';
                     verificationMessage.style.display = 'block';
                     
-                    // Switch to login tab after 2 seconds
+                    // 2秒后切换到登录标签
                     setTimeout(() => {
                         tabs[0].click();
                     }, 2000);
-                    
-                } catch (firebaseError) {
-                    console.error('Firebase auth error:', firebaseError);
-                    
-                    // Fall back to our backend API
-                    const response = await fetch('/api/register', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            email,
-                            password
-                        }),
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (response.ok && data.success) {
-                        registerStatus.innerHTML = '<div class="alert alert-success">Registration successful! Please check your email to verify your account.</div>';
-                        verificationMessage.style.display = 'block';
-                        
-                        // Switch to login tab after 2 seconds
-                        setTimeout(() => {
-                            tabs[0].click();
-                        }, 2000);
-                    } else {
-                        registerStatus.innerHTML = `<div class="alert alert-danger">${data.message || 'Registration failed'}</div>`;
-                    }
+                } else {
+                    registerStatus.innerHTML = `<div class="alert alert-danger">${data.message || '注册失败'}</div>`;
                 }
             } catch (error) {
-                console.error('Registration error:', error);
-                registerStatus.innerHTML = `<div class="alert alert-danger">Registration failed: ${error.message}</div>`;
+                console.error('注册错误:', error);
+                registerStatus.innerHTML = '<div class="alert alert-danger">注册服务暂时不可用，请稍后再试</div>';
             }
         });
         
-        // Google Sign In
+        // Google登录
         googleLoginBtn.addEventListener('click', async () => {
+            loginStatus.innerHTML = '<div class="alert alert-info">正在准备Google登录...</div>';
+            
             try {
-                const provider = new firebase.auth.GoogleAuthProvider();
-                const result = await firebase.auth().signInWithPopup(provider);
-                const user = result.user;
-                const idToken = await user.getIdToken();
+                // 从后端获取Google登录URL
+                const response = await fetch('/api/auth/google-url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        callback: getCallbackUrl() // 传递回调URL
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success && data.authUrl) {
+                    // 重定向到Google登录页面
+                    window.location.href = data.authUrl;
+                } else {
+                    loginStatus.innerHTML = `<div class="alert alert-danger">${data.message || 'Google登录服务暂时不可用'}</div>`;
+                }
+            } catch (error) {
+                console.error('Google登录错误:', error);
+                loginStatus.innerHTML = '<div class="alert alert-danger">无法启动Google登录，请稍后再试</div>';
+            }
+        });
+        
+        // 检查URL参数，处理各种重定向情况
+        document.addEventListener('DOMContentLoaded', async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // 处理验证邮件链接
+            const mode = urlParams.get('mode');
+            if (mode === 'verifyEmail') {
+                const oobCode = urlParams.get('oobCode'); // Firebase的操作码
+                
+                if (oobCode) {
+                    try {
+                        // 让后端处理邮箱验证
+                        const response = await fetch('/api/auth/verify-email', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ oobCode }),
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok && data.success) {
+                            verificationMessage.textContent = '邮箱验证成功！您现在可以登录了。';
+                        } else {
+                            verificationMessage.textContent = `验证失败: ${data.message || '请重新尝试登录并获取新的验证链接。'}`;
+                        }
+                    } catch (error) {
+                        console.error('邮箱验证错误:', error);
+                        verificationMessage.textContent = '邮箱验证服务暂时不可用，请稍后再试。';
+                    }
+                    
+                    verificationMessage.style.display = 'block';
+                }
+            }
+            
+            // 处理Google登录回调
+            const authCode = urlParams.get('code');
+            const state = urlParams.get('state');
+            
+            if (authCode && state) {
+                loginStatus.innerHTML = '<div class="alert alert-info">正在处理Google登录...</div>';
                 
                 try {
-                    // Send token to backend for verification and user creation/login
-                    const response = await fetch('/api/google-login', {
+                    // 发送授权码给后端处理
+                    const response = await fetch('/api/auth/google-callback', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
-                            idToken
+                            code: authCode,
+                            state: state
                         }),
                     });
                     
                     const data = await response.json();
                     
                     if (response.ok && data.success) {
-                        // Store auth data
-                        localStorage.setItem('auth_token', data.token);
-                        localStorage.setItem('user_id', data.user_id);
-                        localStorage.setItem('api_key', data.api_key);
-                        
-                        loginStatus.innerHTML = '<div class="alert alert-success">Google login successful! Redirecting...</div>';
-                        
-                        // Redirect
-                        setTimeout(() => {
-                            window.location.href = '/';
-                        }, 1500);
+                        loginStatus.innerHTML = '<div class="alert alert-success">Google登录成功！正在重定向...</div>';
+                        handleAuthSuccess(data.user_id, data.api_key);
                     } else {
-                        loginStatus.innerHTML = `<div class="alert alert-danger">${data.message || 'Google login failed'}</div>`;
+                        loginStatus.innerHTML = `<div class="alert alert-danger">${data.message || 'Google登录失败'}</div>`;
                     }
                 } catch (error) {
-                    console.error('Backend verification error:', error);
-                    loginStatus.innerHTML = `<div class="alert alert-danger">Backend verification failed: ${error.message}</div>`;
+                    console.error('Google回调处理错误:', error);
+                    loginStatus.innerHTML = '<div class="alert alert-danger">处理Google登录时出错，请稍后再试</div>';
                 }
-            } catch (error) {
-                console.error('Google sign in error:', error);
-                loginStatus.innerHTML = `<div class="alert alert-danger">Google sign in failed: ${error.message}</div>`;
+                
+                // 确保登录标签是活跃的
+                tabs[0].click();
             }
         });
-        
-        // Check if user is coming from email verification
-        const urlParams = new URLSearchParams(window.location.search);
-        const mode = urlParams.get('mode');
-        if (mode === 'verifyEmail') {
-            // This is a verification link, Firebase handles it automatically
-            // Just show a success message
-            verificationMessage.textContent = 'Email verification successful! You can now log in.';
-            verificationMessage.style.display = 'block';
-        }
     </script>
 </body>
 </html> 
