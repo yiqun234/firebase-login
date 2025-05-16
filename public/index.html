@@ -79,7 +79,7 @@
                   <div class="d-grid gap-2 mt-4">
                     <button type="submit" class="btn btn-primary">Login</button>
                   </div>
-                  <div id="loginStatus" class="status-message"></div>
+
                 </form>
                 <hr class="my-4">
                 <div class="d-grid gap-2">
@@ -91,6 +91,7 @@
                   </button>
                 </div>
               </div>
+              <div id="loginStatus" class="status-message"></div>
               
               <!-- 注册表单 -->
               <div class="tab-pane fade" id="register" role="tabpanel" aria-labelledby="register-tab">
@@ -156,6 +157,11 @@
         if (loginForm) {
             loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const loginButton = loginForm.querySelector('button[type="submit"]');
+            const originalButtonText = loginButton.innerHTML;
+            loginButton.disabled = true;
+            loginButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Logging in...';
+            
             console.log("Login form submitted, preventDefault called."); 
             
             const email = document.getElementById('loginEmail').value;
@@ -195,6 +201,11 @@
                   document.getElementById('resendVerificationEmailBtn').addEventListener('click', async (event) => {
                     event.preventDefault();
                     event.stopPropagation();
+                    const resendButton = event.target;
+                    const originalResendButtonText = resendButton.innerHTML;
+                    resendButton.disabled = true;
+                    resendButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Sending...';
+
                     try {
                       const user = auth.currentUser;
                       if (user) {
@@ -206,6 +217,13 @@
                     } catch (err) {
                       console.error("Error resending verification email:", err);
                       statusEl.innerHTML = `<div class="alert alert-danger">Failed to resend verification email: ${err.message}</div>`;
+                    } finally {
+                        if(document.getElementById('resendVerificationEmailBtn')) {
+                           resendButton.disabled = false;
+                           resendButton.innerHTML = originalResendButtonText;
+                        } else {
+                            // if the button was removed (e.g. on success message), no need to re-enable
+                        }
                     }
                   });
                 } else {
@@ -235,6 +253,8 @@
               }
               statusEl.innerHTML = `<div class="alert alert-danger">${errorMessage}</div>`;
             }
+            loginButton.disabled = false;
+            loginButton.innerHTML = originalButtonText;
           });
         } else {
             console.error("Login form not found");
@@ -244,7 +264,11 @@
         const googleSignInBtn = document.getElementById('googleSignInBtn');
         if (googleSignInBtn) {
           googleSignInBtn.addEventListener('click', async () => {
-            const statusEl = document.getElementById('loginStatus'); // Use login status for messages
+            const originalButtonText = googleSignInBtn.innerHTML;
+            googleSignInBtn.disabled = true;
+            googleSignInBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Signing in...';
+
+            const statusEl = document.getElementById('loginStatus'); 
             statusEl.innerHTML = '<div class="alert alert-info">Redirecting to Google Sign-In...</div>';
             try {
               const result = await auth.signInWithPopup(googleProvider);
@@ -306,6 +330,8 @@
               }
               statusEl.innerHTML = `<div class="alert alert-danger">${errorMessage}</div>`;
             }
+            googleSignInBtn.disabled = false;
+            googleSignInBtn.innerHTML = originalButtonText;
           });
         } else {
             console.error("Google Sign-In button not found");
@@ -316,6 +342,10 @@
         if (registerForm) {
             registerForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const registerButton = registerForm.querySelector('button[type="submit"]');
+            const originalButtonText = registerButton.innerHTML;
+            registerButton.disabled = true;
+            registerButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Registering...';
             
             const email = document.getElementById('registerEmail').value;
             const password = document.getElementById('registerPassword').value;
@@ -352,6 +382,8 @@
               console.error('注册错误:', error);
               statusEl.innerHTML = `<div class="alert alert-danger">Registration failed: ${error.message}</div>`;
             }
+            registerButton.disabled = false;
+            registerButton.innerHTML = originalButtonText;
           });
         } else {
             console.error("Register form not found");
