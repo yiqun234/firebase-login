@@ -14,7 +14,7 @@ try {
   admin = require('firebase-admin');
   const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT ? 
     JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT) : 
-    require('../serviceAccountKey.json');
+    require('./serviceAccountKey.json');
   
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
@@ -38,7 +38,7 @@ app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Test mode flag - set to true to skip actual authentication and return success
-const TEST_MODE = true;
+const TEST_MODE = false;
 
 // Middleware to verify API key
 async function verifyApiKeyMiddleware(req, res, next) {
