@@ -180,7 +180,9 @@
                   let resendButtonHtml = `<button id="resendVerificationEmailBtn" class="btn btn-warning btn-sm mt-2">重新发送验证邮件</button>`;
                   statusEl.innerHTML = `<div class="alert alert-danger">${data.message}<br>如果您没有收到邮件，可以尝试重新发送。</div>${resendButtonHtml}`;
                   
-                  document.getElementById('resendVerificationEmailBtn').addEventListener('click', async () => {
+                  document.getElementById('resendVerificationEmailBtn').addEventListener('click', async (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
                     try {
                       // Get the currently signed-in user (even if email is not verified, 
                       // signInWithEmailAndPassword would have set auth.currentUser if credentials were valid)
@@ -257,6 +259,10 @@
               const data = await response.json();
               
               if (data.success) {
+                const user = auth.currentUser;
+                if (user) {
+                  await user.sendEmailVerification();
+                }
                 statusEl.innerHTML = '<div class="alert alert-success">注册成功！Firebase将发送验证邮件，请检查邮箱并点击链接验证。</div>'; // 更明确的提示
                 // 在注册成功后，通常不需要立即重定向到 callback，因为用户需要先验证邮箱。
                 // const callbackUrl = getCallbackUrl();
