@@ -40,6 +40,43 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Test mode flag - set to true to skip actual authentication and return success
 const TEST_MODE = true;
 
+// Middleware to verify API key
+async function verifyApiKeyMiddleware(req, res, next) {
+  try {
+    // Support both header and body
+    const apiKey = req.headers['x-api-key'] || req.body.api_key;
+    const userId = req.headers['x-user-id'] || req.body.user_id;
+    if (!apiKey || !userId) {
+      return res.status(401).json({ error: 'API key and user ID are required' });
+    }
+    let isValid = false;
+    if (admin) {
+      // Firebase mode
+      const db = admin.firestore();
+      const apiKeyDoc = await db.collection('api_keys').doc(apiKey).get();
+      if (apiKeyDoc.exists && apiKeyDoc.data().userId === userId) {
+        isValid = true;
+      }
+    } else {
+      // Local mode
+      const apiKeyEntry = apiKeys.find(entry => entry.key === apiKey);
+      if (apiKeyEntry && apiKeyEntry.userId === userId) {
+        isValid = true;
+      }
+    }
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid API key or user ID' });
+    }
+    // Attach user info to request if needed
+    req.apiUserId = userId;
+    req.apiKey = apiKey;
+    next();
+  } catch (error) {
+    console.error('API key verification middleware error:', error);
+    return res.status(500).json({ error: 'API key verification failed: ' + error.message });
+  }
+}
+
 // Routes
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -324,7 +361,7 @@ app.post('/api/verify-key', async (req, res) => {
 });
 
 // Job fit evaluation API
-app.post('/api/evaluate-job-fit', async (req, res) => {
+app.post('/api/evaluate-job-fit', verifyApiKeyMiddleware, async (req, res) => {
   try {
     // Parse request parameters
     const { context, job_title, job_description, debug, openai_api_key } = req.body;
@@ -412,7 +449,7 @@ app.post('/api/evaluate-job-fit', async (req, res) => {
 });
 
 // AI response generation API
-app.post('/api/generate-response', async (req, res) => {
+app.post('/api/generate-response', verifyApiKeyMiddleware, async (req, res) => {
   try {
     // Parse request parameters
     const { 
@@ -540,7 +577,7 @@ Important rules:
 });
 
 // Extract structured data from resume API
-app.post('/api/extract-from-resume', async (req, res) => {
+app.post('/api/extract-from-resume', verifyApiKeyMiddleware, async (req, res) => {
   try {
     const {
       resumeText,
