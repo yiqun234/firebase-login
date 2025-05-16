@@ -5,6 +5,7 @@ const path = require('path');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 const jwt = require('jsonwebtoken');
+const { OpenAI } = require('openai');
 require('dotenv').config();
 
 // 如果使用Firebase，引入Firebase Admin SDK
@@ -46,6 +47,11 @@ app.get('/', (req, res) => {
 
 app.get('/auth/callback', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'callback.html'));
+});
+
+
+app.get('/response-generator', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'response-generator.html'));
 });
 
 // 注册API
@@ -318,6 +324,222 @@ app.post('/api/verify-key', async (req, res) => {
   } catch (error) {
     console.error('验证API密钥错误:', error);
     return res.status(500).json({ success: false, message: '验证失败: ' + error.message });
+  }
+});
+
+// 工作匹配评估API
+app.post('/api/evaluate-job-fit', async (req, res) => {
+  try {
+    // 解析请求参数
+    const { context, job_title, job_description, debug, openai_api_key } = req.body;
+    
+    // 验证必要参数
+    if (!job_title || !job_description) {
+      return res.status(400).json({
+        success: false,
+        error: '缺少工作标题或描述'
+      });
+    }
+    
+    // 获取API密钥（优先使用请求中提供的密钥，其次使用环境变量）
+    const apiKey = openai_api_key || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return res.status(400).json({
+        success: false,
+        error: 'OpenAI API密钥未配置'
+      });
+    }
+    
+    // 初始化OpenAI客户端
+    const openaiClient = new OpenAI({ apiKey });
+    
+    // 构建系统提示
+    let systemPrompt = `You are evaluating job fit for technical roles. 
+            Recommend APPLY if:
+            - Candidate meets 65 percent of the core requirements
+            - Experience gap is 2 years or less
+            - Has relevant transferable skills
+
+            Return SKIP if:
+            - Experience gap is greater than 2 years
+            - Missing multiple core requirements
+            - Role is clearly more senior
+            - The role is focused on an uncommon technology or skill that is required and that the candidate does not have experience with
+            - The role is a leadership role or a role that requires managing people and the candidate has no experience leading or managing people
+            
+            `;
+    
+    if (debug) {
+      systemPrompt += `
+      You are in debug mode. Return a detailed explanation of your reasoning for each requirement.
+
+            Return APPLY or SKIP followed by a brief explanation.
+
+            Format response as: APPLY/SKIP: [brief reason]`;
+    } else {
+      systemPrompt += `Return only APPLY or SKIP.`;
+    }
+    
+    // 调用OpenAI API
+    const response = await openaiClient.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Job: ${job_title}\n${job_description}\n\nCandidate:\n${context}` }
+      ],
+      max_tokens: debug ? 250 : 1,
+      temperature: 0.2
+    });
+    
+    const answer = response.choices[0].message.content.trim();
+    
+    // 解析结果
+    const decision = answer.toUpperCase().startsWith('A'); // APPLY = true, SKIP = false
+    const explanation = debug ? answer : "";
+    
+    // 返回结果
+    return res.status(200).json({
+      success: true,
+      result: decision,
+      explanation: explanation,
+      status: 'success'
+    });
+    
+  } catch (error) {
+    console.error('评估工作匹配度错误:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message,
+      status: 'error'
+    });
+  }
+});
+
+// AI响应生成API
+app.post('/api/generate-response', async (req, res) => {
+  try {
+    // 解析请求参数
+    const { 
+      context, 
+      question, 
+      response_type = 'text', 
+      options, 
+      max_tokens = 3000, 
+      debug = false, 
+      openai_api_key 
+    } = req.body;
+    
+    // 验证必要参数
+    if (!question) {
+      return res.status(400).json({
+        success: false,
+        error: '缺少问题参数'
+      });
+    }
+    
+    // 获取API密钥（优先使用请求中提供的密钥，其次使用环境变量）
+    const apiKey = openai_api_key || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return res.status(400).json({
+        success: false,
+        error: 'OpenAI API密钥未配置'
+      });
+    }
+    
+    // 初始化OpenAI客户端
+    const openaiClient = new OpenAI({ apiKey });
+    
+    // 根据响应类型构建系统提示
+    let systemPrompt;
+    if (response_type === 'text') {
+      systemPrompt = `
+You are an intelligent AI assistant filling out a form and answer like human,. 
+Respond concisely based on the type of question:
+
+1. If the question asks for **years of experience, duration, or numeric value**, return **only a number** (e.g., "2", "5", "10").
+2. If the question is **a Yes/No question**, return **only "Yes" or "No"**.
+3. If the question requires a **short description**, give a **single-sentence response**.
+4. If the question requires a **detailed response**, provide a **well-structured and human-like answer and keep no of character <350 for answering**.
+5. Do **not** repeat the question in your answer.
+6. here is user information to answer the questions if needed:
+**User Information:** 
+${context}
+`;
+    } else if (response_type === 'numeric') {
+      systemPrompt = "You are a helpful assistant providing numeric answers to job application questions. Based on the candidate's experience, provide a single number as your response. No explanation needed.";
+    } else if (response_type === 'choice') {
+      systemPrompt = `
+You are a helpful assistant selecting the most appropriate answer choice for job application questions. Based on the candidate's background, select the best option by returning only its index number. 
+
+Important rules:
+1. Never select options like "Select an option" or other placeholder instructions
+2. Only select "Yes" for questions when you have explicit evidence supporting that answer
+3. When in doubt about factual information not provided in context, default to the most conservative or non-committal valid option
+4. You need to think carefully, but in the end you need to return the option number.
+`;
+    }
+    
+    // 构建用户提示
+    let userContent;
+    if (response_type === 'text') {
+      userContent = `Please answer this job application question: ${question}`;
+    } else {
+      userContent = `Using this candidate's background and resume:\n${context}\n\nPlease answer this job application question: ${question}`;
+    }
+    
+    // 如果是选择题，添加选项
+    if (response_type === 'choice' && options) {
+      const optionsText = options.map((text, idx) => `${idx}: ${text}`).join('\n');
+      userContent += `\n\nSelect the most appropriate answer by providing its index number from these options:\n${optionsText}`;
+    }
+    
+    // 调用OpenAI API
+    const response = await openaiClient.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent }
+      ],
+      max_tokens: max_tokens,
+      temperature: 0.7
+    });
+    
+    const answer = response.choices[0].message.content.trim();
+    
+    // 处理不同类型的响应
+    let result;
+    if (response_type === 'numeric') {
+      // 提取第一个数字
+      const numbers = answer.match(/\d+/);
+      result = numbers ? parseInt(numbers[0]) : 0;
+    } else if (response_type === 'choice') {
+      // 提取索引号
+      const numbers = answer.match(/\d+/);
+      if (numbers && options) {
+        const index = parseInt(numbers[0]);
+        // 确保索引在有效范围内
+        result = (index >= 0 && index < options.length) ? index : null;
+      } else {
+        result = null;
+      }
+    } else {
+      result = answer;
+    }
+    
+    // 返回结果
+    return res.status(200).json({
+      success: true,
+      result: result,
+      status: 'success'
+    });
+    
+  } catch (error) {
+    console.error('AI响应生成错误:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message,
+      status: 'error'
+    });
   }
 });
 

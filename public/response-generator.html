@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI响应生成器 - EasyApply</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        textarea, input[type="text"], input[type="number"], select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 120px;
+            resize: vertical;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+            white-space: pre-wrap;
+        }
+        .success {
+            background-color: #dff0d8;
+            border: 1px solid #d6e9c6;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            border: 1px solid #ebccd1;
+            color: #a94442;
+        }
+        .loading {
+            text-align: center;
+            display: none;
+        }
+        .options-container {
+            margin-top: 15px;
+            display: none;
+        }
+        .option-item {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        .option-item input {
+            flex-grow: 1;
+        }
+        .option-item button {
+            margin-left: 10px;
+            padding: 5px 10px;
+            background-color: #f44336;
+        }
+        .add-option-btn {
+            background-color: #2196F3;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI响应生成器</h1>
+        <div class="form-group">
+            <label for="openai-key">OpenAI API密钥 (可选)</label>
+            <input type="text" id="openai-key" placeholder="如果服务器未配置API密钥，请提供您的OpenAI API密钥">
+        </div>
+        <div class="form-group">
+            <label for="response-type">响应类型</label>
+            <select id="response-type">
+                <option value="text">文本</option>
+                <option value="numeric">数字</option>
+                <option value="choice">选择题</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="question">问题</label>
+            <input type="text" id="question" placeholder="输入需要AI回答的问题">
+        </div>
+        <div class="form-group">
+            <label for="max-tokens">最大令牌数</label>
+            <input type="number" id="max-tokens" value="3000" min="1" max="4000">
+        </div>
+        <div class="form-group">
+            <label for="candidate-info">候选人信息</label>
+            <textarea id="candidate-info" placeholder="输入候选人个人信息和简历内容"></textarea>
+        </div>
+        
+        <!-- 选择题选项容器 -->
+        <div class="options-container" id="options-container">
+            <label>选项列表：</label>
+            <div id="options-list"></div>
+            <button class="add-option-btn" id="add-option-btn">添加选项</button>
+        </div>
+        
+        <button id="generate-btn">生成回答</button>
+        
+        <div class="loading" id="loading">
+            <p>正在生成回答，请稍候...</p>
+        </div>
+        
+        <div class="result" id="result"></div>
+    </div>
+
+    <script>
+        // 选择题类型显示/隐藏选项
+        document.getElementById('response-type').addEventListener('change', function() {
+            const optionsContainer = document.getElementById('options-container');
+            if (this.value === 'choice') {
+                optionsContainer.style.display = 'block';
+                // 如果没有选项，默认添加两个
+                const optionsList = document.getElementById('options-list');
+                if (optionsList.children.length === 0) {
+                    addOption();
+                    addOption();
+                }
+            } else {
+                optionsContainer.style.display = 'none';
+            }
+        });
+        
+        // 添加选项
+        document.getElementById('add-option-btn').addEventListener('click', addOption);
+        
+        function addOption(optionText = '') {
+            const optionsList = document.getElementById('options-list');
+            const optionItem = document.createElement('div');
+            optionItem.className = 'option-item';
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'option-input';
+            input.value = optionText;
+            input.placeholder = '输入选项文本';
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.textContent = '删除';
+            removeBtn.addEventListener('click', function() {
+                optionsList.removeChild(optionItem);
+            });
+            
+            optionItem.appendChild(input);
+            optionItem.appendChild(removeBtn);
+            optionsList.appendChild(optionItem);
+        }
+        
+        // 生成回答
+        document.getElementById('generate-btn').addEventListener('click', async function() {
+            const question = document.getElementById('question').value.trim();
+            const candidateInfo = document.getElementById('candidate-info').value.trim();
+            const openaiKey = document.getElementById('openai-key').value.trim();
+            const responseType = document.getElementById('response-type').value;
+            const maxTokens = parseInt(document.getElementById('max-tokens').value);
+            
+            const resultDiv = document.getElementById('result');
+            const loadingDiv = document.getElementById('loading');
+            
+            if (!question) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '<strong>错误:</strong> 请输入问题';
+                resultDiv.style.display = 'block';
+                return;
+            }
+            
+            // 获取选项（如果是选择题）
+            let options = null;
+            if (responseType === 'choice') {
+                options = [];
+                const optionInputs = document.querySelectorAll('.option-input');
+                optionInputs.forEach(input => {
+                    if (input.value.trim()) {
+                        options.push(input.value.trim());
+                    }
+                });
+                
+                if (options.length < 2) {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = '<strong>错误:</strong> 选择题至少需要两个选项';
+                    resultDiv.style.display = 'block';
+                    return;
+                }
+            }
+            
+            // 隐藏结果，显示加载
+            resultDiv.style.display = 'none';
+            loadingDiv.style.display = 'block';
+            
+            try {
+                const response = await fetch('/api/generate-response', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        context: candidateInfo,
+                        response_type: responseType,
+                        options: options,
+                        max_tokens: maxTokens,
+                        openai_api_key: openaiKey || undefined
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                // 隐藏加载
+                loadingDiv.style.display = 'none';
+                
+                if (response.ok && data.success) {
+                    resultDiv.className = 'result success';
+                    let resultHtml = `<strong>生成结果:</strong>\n\n`;
+                    
+                    if (responseType === 'choice' && options && typeof data.result === 'number') {
+                        resultHtml += `选择选项: ${data.result} - ${options[data.result]}`;
+                    } else {
+                        resultHtml += data.result;
+                    }
+                    
+                    resultDiv.innerHTML = resultHtml;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `<strong>错误:</strong> ${data.error || '生成失败，请重试'}`;
+                }
+                
+                resultDiv.style.display = 'block';
+                
+            } catch (error) {
+                loadingDiv.style.display = 'none';
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `<strong>错误:</strong> ${error.message || '请求失败，请重试'}`;
+                resultDiv.style.display = 'block';
+                console.error('请求错误:', error);
+            }
+        });
+    </script>
+</body>
+</html>
