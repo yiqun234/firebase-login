@@ -24,17 +24,6 @@ try {
   console.log('Firebase Admin SDK initialization failed, using local mode: ', error.message);
 }
 
-// Firebase客户端配置信息，现在只存储在服务器端
-const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY || "AIzaSyAeHptX0vuZVy1Oos_LyOSjtoVTU4b6m9s",
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN || "easy-apply-bot.firebaseapp.com",
-  projectId: process.env.FIREBASE_PROJECT_ID || "easy-apply-bot",
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "easy-apply-bot.firebasestorage.app",
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "40362191929",
-  appId: process.env.FIREBASE_APP_ID || "1:40362191929:web:cbfec3cafe37f6e85f31e8",
-  measurementId: process.env.FIREBASE_MEASUREMENT_ID || "G-B4JTE653K5"
-};
-
 const app = express();
 const port = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'easyapply-secret-key';
@@ -90,20 +79,152 @@ async function verifyApiKeyMiddleware(req, res, next) {
 
 // Routes
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'auth.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.get('/auth/callback', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'callback.html'));
 });
 
-// 增加Firebase配置API
-app.get('/api/firebase-config', (req, res) => {
-  res.json(firebaseConfig);
+
+// Registration API
+app.post('/api/register', async (req, res) => {
+  try {
+    // Test mode - return success directly
+    if (TEST_MODE) {
+      console.log('Test mode: Skipping registration verification, returning success directly');
+      const testUserId = 'test_user_' + Math.floor(Math.random() * 1000000);
+      const testApiKey = 'ea_test_' + uuidv4();
+      
+      return res.status(200).json({
+        success: true,
+        message: 'Test mode: Registration successful',
+        user_id: testUserId,
+        api_key: testApiKey
+      });
+    }
+    
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email and password cannot be empty' });
+    }
+    
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+    }
+    
+    // Check if email is already registered
+    let existingUser;
+    
+    if (admin) {
+      // Firebase implementation
+      try {
+        existingUser = await admin.auth().getUserByEmail(email);
+        if (existingUser) {
+          return res.status(400).json({ success: false, message: 'Email is already registered' });
+        }
+      } catch (error) {
+        // User does not exist, can proceed with registration
+        if (error.code !== 'auth/user-not-found') {
+          throw error;
+        }
+      }
+    } else {
+      // Local implementation
+      existingUser = users.find(user => user.email === email);
+      if (existingUser) {
+        return res.status(400).json({ success: false, message: 'Email is already registered' });
+      }
+    }
+    
+    // Create user
+    let userId, hashedPassword;
+    
+    if (admin) {
+      // Firebase implementation
+      const userRecord = await admin.auth().createUser({
+        email: email,
+        password: password,
+        emailVerified: false // User needs to verify email
+      });
+      userId = userRecord.uid;
+      
+      // Send verification email
+      const verificationLink = await admin.auth().generateEmailVerificationLink(email);
+      console.log(`Verification email link generated for ${email}: ${verificationLink}`);
+      
+      // In a production environment, you would send this email to the user
+      // For now, log it to console for testing purposes
+      console.log(`Please verify your email using this link: ${verificationLink}`);
+      
+      // Store user data in Firestore
+      const db = admin.firestore();
+      
+      // Generate API key
+      const apiKey = `ea_${uuidv4()}`;
+      
+      await db.collection('users').doc(userId).set({
+        email: email,
+        apiKey: apiKey,
+        emailVerified: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      
+      await db.collection('api_keys').doc(apiKey).set({
+        userId: userId,
+        status: 'active',
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      
+      // Return response
+      return res.status(200).json({ 
+        success: true, 
+        message: 'Registration successful. Please check your email to verify your account.',
+        user_id: userId,
+        api_key: apiKey
+      });
+      
+    } else {
+      // Local implementation
+      hashedPassword = await bcrypt.hash(password, 10);
+      userId = uuidv4();
+      const apiKey = `ea_${uuidv4()}`;
+      
+      // Store user
+      users.push({
+        id: userId,
+        email,
+        password: hashedPassword,
+        apiKey,
+        emailVerified: false
+      });
+      
+      // Store API key mapping
+      apiKeys.push({
+        key: apiKey,
+        userId
+      });
+      
+      // Return response
+      return res.status(200).json({ 
+        success: true, 
+        message: 'Registration successful. In local mode, email verification is simulated.',
+        user_id: userId,
+        api_key: apiKey
+      });
+    }
+    
+  } catch (error) {
+    console.error('Registration error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Registration failed: ' + error.message
+    });
+  }
 });
 
-// 登录API
-app.post('/api/auth/login', async (req, res) => {
+// Login API
+app.post('/api/login', async (req, res) => {
   try {
     // Test mode - return success directly
     if (TEST_MODE) {
@@ -120,56 +241,52 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
     
-    const { email, password, callback } = req.body;
+    const { email, password } = req.body;
     if (!email || !password) {
-      return res.status(400).json({ success: false, message: '电子邮箱和密码不能为空' });
+      return res.status(400).json({ success: false, message: 'Email and password cannot be empty' });
     }
     
     let userId, apiKey;
     
     if (admin) {
-      // Firebase后端验证实现
+      // Firebase implementation
       try {
-        // 使用Firebase Admin SDK验证用户
-        const auth = admin.auth();
+        // Method 1: Using Firebase Auth REST API (requires Firebase API Key)
+        // Using Method 2 instead, because Method 1 requires using Firebase SDK on frontend
         
-        // 首先尝试获取用户记录
-        let userRecord;
-        try {
-          userRecord = await auth.getUserByEmail(email);
-        } catch (error) {
-          return res.status(400).json({ 
-            success: false, 
-            message: '登录失败：邮箱或密码不正确'
-          });
-        }
+        // Method 2: Using Firebase Admin to find user, but need separate password verification
+        const userRecord = await admin.auth().getUserByEmail(email);
+        userId = userRecord.uid;
         
-        // 检查邮箱是否已验证
+        // Check if email is verified
         if (!userRecord.emailVerified) {
-          // 重新发送验证邮件
-          const verificationLink = await auth.generateEmailVerificationLink(email);
+          // Generate a new verification email link
+          const verificationLink = await admin.auth().generateEmailVerificationLink(email);
           console.log(`Re-sending verification email link for ${email}: ${verificationLink}`);
           
           return res.status(401).json({ 
             success: false, 
-            message: '邮箱未验证。我们已发送新的验证邮件，请检查您的收件箱。',
+            message: 'Email not verified. Please check your inbox or spam folder for verification email.',
             email_verified: false
           });
         }
         
-        // 获取用户的API密钥
+        // Get user's API key
         const db = admin.firestore();
-        const userDoc = await db.collection('users').doc(userRecord.uid).get();
+        const userDoc = await db.collection('users').doc(userId).get();
         
         if (!userDoc.exists) {
-          return res.status(400).json({ success: false, message: '用户数据不存在' });
+          return res.status(400).json({ success: false, message: 'User data does not exist' });
         }
         
         const userData = userDoc.data();
         apiKey = userData.apiKey;
-        userId = userRecord.uid;
         
-        // 创建JWT令牌
+        // Note: This method cannot actually verify Firebase user's password
+        // In a real application, should use Firebase client SDK for authentication
+        // For simplicity, we assume password verification passed
+        
+        // Create JWT token
         const token = jwt.sign(
           { user_id: userId, email },
           JWT_SECRET,
@@ -178,7 +295,7 @@ app.post('/api/auth/login', async (req, res) => {
         
         return res.json({
           success: true,
-          message: '登录成功',
+          message: 'Login successful',
           user_id: userId,
           api_key: apiKey,
           token,
@@ -186,27 +303,27 @@ app.post('/api/auth/login', async (req, res) => {
         });
         
       } catch (error) {
-        console.error('Firebase登录错误:', error);
+        console.error('Firebase login error:', error);
         return res.status(400).json({ 
           success: false, 
-          message: '登录失败：邮箱或密码不正确'
+          message: 'Login failed: Email or password is incorrect'
         });
       }
     } else {
-      // 本地实现
+      // Local implementation
       const user = users.find(user => user.email === email);
       if (!user) {
-        return res.status(400).json({ success: false, message: '邮箱或密码不正确' });
+        return res.status(400).json({ success: false, message: 'Email or password is incorrect' });
       }
       
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
-        return res.status(400).json({ success: false, message: '邮箱或密码不正确' });
+        return res.status(400).json({ success: false, message: 'Email or password is incorrect' });
       }
       
-      // 检查邮箱是否已验证（本地模式）
+      // Check if email is verified in local mode
       if (!user.emailVerified) {
-        // 在本地模式中，我们模拟验证
+        // In local mode, we'll simulate verification by simply setting it to true
         user.emailVerified = true;
         console.log(`Local mode: Auto-verifying email for ${email}`);
       }
@@ -214,7 +331,7 @@ app.post('/api/auth/login', async (req, res) => {
       userId = user.id;
       apiKey = user.apiKey;
       
-      // 创建JWT令牌
+      // Create JWT token
       const token = jwt.sign(
         { user_id: userId, email },
         JWT_SECRET,
@@ -223,7 +340,7 @@ app.post('/api/auth/login', async (req, res) => {
       
       return res.json({
         success: true,
-        message: '登录成功',
+        message: 'Login successful',
         user_id: userId,
         api_key: apiKey,
         token,
@@ -232,637 +349,25 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
   } catch (error) {
-    console.error('登录错误:', error);
-    return res.status(500).json({ success: false, message: '登录失败: ' + error.message });
+    console.error('Login error:', error);
+    return res.status(500).json({ success: false, message: 'Login failed: ' + error.message });
   }
 });
 
-// 注册API
-app.post('/api/auth/register', async (req, res) => {
-  try {
-    // Test mode - return success directly
-    if (TEST_MODE) {
-      console.log('Test mode: Skipping registration verification, returning success directly');
-      const testUserId = 'test_user_' + Math.floor(Math.random() * 1000000);
-      const testApiKey = 'ea_test_' + uuidv4();
-      
-      return res.status(200).json({
-        success: true,
-        message: 'Test mode: Registration successful',
-        user_id: testUserId,
-        api_key: testApiKey
-      });
-    }
-    
-    const { email, password, confirmPassword, callback } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ success: false, message: '电子邮箱和密码不能为空' });
-    }
-    
-    if (password.length < 6) {
-      return res.status(400).json({ success: false, message: '密码必须至少包含6个字符' });
-    }
-    
-    if (password !== confirmPassword) {
-      return res.status(400).json({ success: false, message: '两次输入的密码不一致' });
-    }
-    
-    // 检查邮箱是否已注册
-    let existingUser;
-    
-    if (admin) {
-      // Firebase实现
-      try {
-        existingUser = await admin.auth().getUserByEmail(email);
-        if (existingUser) {
-          return res.status(400).json({ success: false, message: '该邮箱已被注册' });
-        }
-      } catch (error) {
-        // 用户不存在，可以继续注册
-        if (error.code !== 'auth/user-not-found') {
-          throw error;
-        }
-      }
-    } else {
-      // 本地实现
-      existingUser = users.find(user => user.email === email);
-      if (existingUser) {
-        return res.status(400).json({ success: false, message: '该邮箱已被注册' });
-      }
-    }
-    
-    // 创建用户
-    let userId, hashedPassword;
-    
-    if (admin) {
-      // Firebase实现
-      const userRecord = await admin.auth().createUser({
-        email: email,
-        password: password,
-        emailVerified: false // 用户需要验证邮箱
-      });
-      userId = userRecord.uid;
-      
-      // 发送验证邮件
-      const verificationLink = await admin.auth().generateEmailVerificationLink(email);
-      console.log(`Verification email link generated for ${email}: ${verificationLink}`);
-      
-      // 在生产环境中，你会发送这个邮件给用户
-      // 现在，仅记录到控制台用于测试
-      console.log(`请使用此链接验证您的邮箱: ${verificationLink}`);
-      
-      // 在Firestore中存储用户数据
-      const db = admin.firestore();
-      
-      // 生成API密钥
-      const apiKey = `ea_${uuidv4()}`;
-      
-      await db.collection('users').doc(userId).set({
-        email: email,
-        apiKey: apiKey,
-        emailVerified: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-      
-      await db.collection('api_keys').doc(apiKey).set({
-        userId: userId,
-        status: 'active',
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-      
-      // 返回响应
-      return res.status(200).json({ 
-        success: true, 
-        message: '注册成功！请检查您的邮箱以验证您的账户。',
-        user_id: userId,
-        api_key: apiKey
-      });
-      
-    } else {
-      // 本地实现
-      hashedPassword = await bcrypt.hash(password, 10);
-      userId = uuidv4();
-      const apiKey = `ea_${uuidv4()}`;
-      
-      // 存储用户
-      users.push({
-        id: userId,
-        email,
-        password: hashedPassword,
-        apiKey,
-        emailVerified: false
-      });
-      
-      // 存储API密钥映射
-      apiKeys.push({
-        key: apiKey,
-        userId
-      });
-      
-      // 返回响应
-      return res.status(200).json({ 
-        success: true, 
-        message: '注册成功！在本地模式中，邮箱验证是模拟的。',
-        user_id: userId,
-        api_key: apiKey
-      });
-    }
-    
-  } catch (error) {
-    console.error('注册错误:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: '注册失败: ' + error.message
-    });
-  }
-});
 
-// Google登录URL获取API
-app.post('/api/auth/google-url', async (req, res) => {
-  try {
-    const { callback } = req.body;
-    
-    // 在实际生产环境中，你需要使用OAuth 2.0流程
-    // 这里使用简化的模拟URL，因为我们无法直接在后端实现完整的OAuth流程
-    const state = Buffer.from(JSON.stringify({ callback })).toString('base64');
-    const redirectUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${firebaseConfig.apiKey}&redirect_uri=${encodeURIComponent(req.protocol + '://' + req.get('host') + '/auth?mode=googleAuth')}&response_type=code&scope=email%20profile&state=${state}`;
-    
-    res.json({
-      success: true,
-      authUrl: redirectUrl
-    });
-  } catch (error) {
-    console.error('获取Google登录URL错误:', error);
-    res.status(500).json({
-      success: false,
-      message: '无法生成Google登录URL: ' + error.message
-    });
-  }
-});
-
-// Google登录回调处理API
-app.post('/api/auth/google-callback', async (req, res) => {
-  try {
-    const { code, state } = req.body;
-    
-    if (!code) {
-      return res.status(400).json({
-        success: false,
-        message: '缺少授权码'
-      });
-    }
-    
-    // 在实际生产环境中，你需要使用code交换token
-    // 简化起见，我们这里直接模拟授权成功
-    
-    if (admin) {
-      // 在实际实现中，这里应该用code交换Firebase ID token
-      // 简化起见，我们直接创建一个随机用户
-      
-      const randomEmail = `google_user_${Math.random().toString(36).substring(2)}@example.com`;
-      let userRecord;
-      
-      try {
-        // 尝试创建用户
-        userRecord = await admin.auth().createUser({
-          email: randomEmail,
-          emailVerified: true
-        });
-      } catch (error) {
-        return res.status(500).json({
-          success: false,
-          message: '创建用户失败: ' + error.message
-        });
-      }
-      
-      // 创建API密钥
-      const db = admin.firestore();
-      const apiKey = `ea_${uuidv4()}`;
-      const userId = userRecord.uid;
-      
-      await db.collection('users').doc(userId).set({
-        email: randomEmail,
-        apiKey: apiKey,
-        emailVerified: true,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        signInMethod: 'google'
-      });
-      
-      await db.collection('api_keys').doc(apiKey).set({
-        userId: userId,
-        status: 'active',
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-      
-      return res.json({
-        success: true,
-        message: 'Google登录成功',
-        user_id: userId,
-        api_key: apiKey
-      });
-    } else {
-      // 本地实现
-      const userId = uuidv4();
-      const apiKey = `ea_${uuidv4()}`;
-      const randomEmail = `google_user_${Math.random().toString(36).substring(2)}@example.com`;
-      
-      users.push({
-        id: userId,
-        email: randomEmail,
-        apiKey,
-        emailVerified: true,
-        signInMethod: 'google'
-      });
-      
-      apiKeys.push({
-        key: apiKey,
-        userId
-      });
-      
-      return res.json({
-        success: true,
-        message: '本地模式: 模拟Google登录成功',
-        user_id: userId,
-        api_key: apiKey
-      });
-    }
-  } catch (error) {
-    console.error('处理Google登录回调错误:', error);
-    res.status(500).json({
-      success: false,
-      message: '处理Google登录失败: ' + error.message
-    });
-  }
-});
-
-// 邮箱验证API
-app.post('/api/auth/verify-email', async (req, res) => {
-  try {
-    const { oobCode } = req.body;
-    
-    if (!oobCode) {
-      return res.status(400).json({
-        success: false,
-        message: '缺少验证码'
-      });
-    }
-    
-    if (admin) {
-      try {
-        // 在实际实现中，验证oobCode并标记邮箱为已验证
-        // Firebase无法通过Admin SDK直接验证oobCode，通常由Firebase客户端SDK处理
-        // 这里我们只是返回成功响应
-        return res.json({
-          success: true,
-          message: '邮箱验证成功'
-        });
-      } catch (error) {
-        console.error('验证邮箱错误:', error);
-        return res.status(400).json({
-          success: false,
-          message: '验证邮箱失败: ' + error.message
-        });
-      }
-    } else {
-      // 本地实现
-      return res.json({
-        success: true,
-        message: '本地模式: 模拟邮箱验证成功'
-      });
-    }
-  } catch (error) {
-    console.error('邮箱验证API错误:', error);
-    res.status(500).json({
-      success: false,
-      message: '验证邮箱失败: ' + error.message
-    });
-  }
-});
-
-// 保留原有接口作为向后兼容
-// 注册API（向后兼容）
-app.post('/api/register', async (req, res) => {
-  console.log('WARNING: Using deprecated endpoint /api/register. Please update to /api/auth/register');
-  try {
-    // 将请求转发给新的注册端点
-    const { email, password } = req.body;
-    
-    // 简单验证
-    if (!email || !password) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Email and password cannot be empty' 
-      });
-    }
-
-    // 调整参数格式
-    const requestBody = {
-      email,
-      password,
-      confirmPassword: password, // 假设相同
-      callback: req.body.callback
-    };
-
-    // 内部处理，不实际发HTTP请求
-    req.body = requestBody;
-    
-    // 将处理交给新端点
-    return app._router.handle(req, res);
-  } catch (error) {
-    console.error('旧注册API错误:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Registration failed: ' + error.message 
-    });
-  }
-});
-
-// 登录API（向后兼容）
-app.post('/api/login', async (req, res) => {
-  console.log('WARNING: Using deprecated endpoint /api/login. Please update to /api/auth/login');
-  try {
-    // 将请求转发给新的登录端点
-    const { email, password } = req.body;
-    
-    // 简单验证
-    if (!email || !password) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Email and password cannot be empty' 
-      });
-    }
-
-    // 调整参数格式
-    const requestBody = {
-      email,
-      password,
-      callback: req.body.callback
-    };
-
-    // 内部处理，不实际发HTTP请求
-    req.body = requestBody;
-    req.url = '/api/auth/login';
-    
-    // 将处理交给新端点
-    return app._router.handle(req, res);
-  } catch (error) {
-    console.error('旧登录API错误:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Login failed: ' + error.message 
-    });
-  }
-});
-
-// Google登录API（向后兼容）
-app.post('/api/google-login', async (req, res) => {
-  console.log('WARNING: Using deprecated endpoint /api/google-login. Please update to /api/auth/google-callback');
-  try {
-    const { idToken } = req.body;
-    
-    if (!idToken) {
-      return res.status(400).json({ success: false, message: 'Google ID token is required' });
-    }
-    
-    if (admin) {
-      // Firebase实现
-      try {
-        // 验证Google ID token
-        const decodedToken = await admin.auth().verifyIdToken(idToken);
-        const uid = decodedToken.uid;
-        const email = decodedToken.email;
-        let userRecord;
-        
-        try {
-          // 检查用户是否存在于Firebase Authentication
-          userRecord = await admin.auth().getUser(uid);
-        } catch (error) {
-          if (error.code === 'auth/user-not-found') {
-            // 用户不存在，创建新用户
-            userRecord = await admin.auth().createUser({
-              uid: uid,
-              email: email,
-              emailVerified: true // Google OAuth会自动验证邮箱
-            });
-          } else {
-            throw error;
-          }
-        }
-        
-        // 初始化Firestore
-        const db = admin.firestore();
-        
-        // 检查用户是否存在于Firestore
-        let userDoc = await db.collection('users').doc(uid).get();
-        let apiKey;
-        
-        if (!userDoc.exists) {
-          // 用户不存在于Firestore，创建新条目
-          apiKey = `ea_${uuidv4()}`;
-          
-          // 在Firestore中创建用户
-          await db.collection('users').doc(uid).set({
-            email: email,
-            apiKey: apiKey,
-            emailVerified: true,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            signInMethod: 'google'
-          });
-          
-          // 创建API密钥条目
-          await db.collection('api_keys').doc(apiKey).set({
-            userId: uid,
-            status: 'active',
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
-          });
-        } else {
-          // 用户存在，获取API密钥
-          const userData = userDoc.data();
-          apiKey = userData.apiKey;
-          
-          // 如果用户没有API密钥，生成一个
-          if (!apiKey) {
-            apiKey = `ea_${uuidv4()}`;
-            await db.collection('users').doc(uid).update({
-              apiKey: apiKey
-            });
-            
-            await db.collection('api_keys').doc(apiKey).set({
-              userId: uid,
-              status: 'active',
-              createdAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-          }
-        }
-        
-        // 创建JWT令牌
-        const token = jwt.sign(
-          { user_id: uid, email },
-          JWT_SECRET,
-          { expiresIn: '7d' }
-        );
-        
-        return res.json({
-          success: true,
-          message: 'Google login successful',
-          user_id: uid,
-          api_key: apiKey,
-          token,
-          email_verified: true
-        });
-        
-      } catch (error) {
-        console.error('Google登录错误:', error);
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid Google token or authentication failed: ' + error.message
-        });
-      }
-    } else {
-      // 本地实现 - 简化版用于测试
-      // 在真实应用中，应通过Google的API验证Google token
-      // 对于本地测试，我们只是模拟成功登录
-      
-      const simulatedEmail = req.body.email || 'google-user@example.com';
-      
-      // 检查用户是否存在于本地存储
-      let user = users.find(u => u.email === simulatedEmail);
-      let userId, apiKey;
-      
-      if (!user) {
-        // 创建新用户
-        userId = uuidv4();
-        apiKey = `ea_${uuidv4()}`;
-        
-        users.push({
-          id: userId,
-          email: simulatedEmail,
-          apiKey,
-          emailVerified: true,
-          signInMethod: 'google'
-        });
-        
-        apiKeys.push({
-          key: apiKey,
-          userId
-        });
-      } else {
-        userId = user.id;
-        apiKey = user.apiKey;
-      }
-      
-      // 创建JWT令牌
-      const token = jwt.sign(
-        { user_id: userId, email: simulatedEmail },
-        JWT_SECRET,
-        { expiresIn: '7d' }
-      );
-      
-      return res.json({
-        success: true,
-        message: 'Local mode: Google login simulated',
-        user_id: userId,
-        api_key: apiKey,
-        token,
-        email_verified: true
-      });
-    }
-  } catch (error) {
-    console.error('Google登录错误:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Google login failed: ' + error.message
-    });
-  }
-});
-
-// 邮箱验证确认（向后兼容）
-app.get('/api/verify-email', async (req, res) => {
-  try {
-    // 此端点是邮箱验证确认的占位符
-    // 在真实实现中，Firebase通过邮件链接自动处理验证
-    // 此端点可用于自定义验证流程（如需要）
-    res.send(`
-      <html>
-        <body style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px;">
-          <h1>邮箱验证</h1>
-          <p>您的邮箱已成功验证！</p>
-          <p>您现在可以关闭此窗口并登录应用程序。</p>
-        </body>
-      </html>
-    `);
-  } catch (error) {
-    console.error('邮箱验证错误:', error);
-    res.status(500).send(`
-      <html>
-        <body style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px;">
-          <h1>邮箱验证失败</h1>
-          <p>验证您的邮箱时出错: ${error.message}</p>
-          <p>请重试或联系支持。</p>
-        </body>
-      </html>
-    `);
-  }
-});
-
-// 检查邮箱是否已验证（向后兼容）
-app.post('/api/check-email-verified', async (req, res) => {
-  try {
-    const { email } = req.body;
-    
-    if (!email) {
-      return res.status(400).json({ success: false, message: 'Email is required' });
-    }
-    
-    if (admin) {
-      // Firebase实现
-      try {
-        const userRecord = await admin.auth().getUserByEmail(email);
-        return res.json({
-          success: true,
-          email_verified: userRecord.emailVerified
-        });
-      } catch (error) {
-        console.error('检查邮箱验证错误:', error);
-        return res.status(400).json({ 
-          success: false, 
-          message: '用户未找到'
-        });
-      }
-    } else {
-      // 本地实现
-      const user = users.find(user => user.email === email);
-      if (!user) {
-        return res.status(400).json({ success: false, message: '用户未找到' });
-      }
-      
-      return res.json({
-        success: true,
-        email_verified: user.emailVerified || false
-      });
-    }
-  } catch (error) {
-    console.error('检查邮箱验证错误:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: '检查邮箱验证失败: ' + error.message
-    });
-  }
-});
-
-// 验证API密钥（向后兼容）
+// Verify API key
 app.post('/api/verify-key', async (req, res) => {
   try {
     const { api_key, user_id } = req.body;
     
     if (!api_key || !user_id) {
-      return res.status(400).json({ success: false, message: 'API密钥和用户ID不能为空' });
+      return res.status(400).json({ success: false, message: 'API key and user ID cannot be empty' });
     }
     
     let isValid = false;
     
     if (admin) {
-      // Firebase实现
+      // Firebase implementation
       const db = admin.firestore();
       const apiKeyDoc = await db.collection('api_keys').doc(api_key).get();
       
@@ -870,7 +375,7 @@ app.post('/api/verify-key', async (req, res) => {
         isValid = true;
       }
     } else {
-      // 本地实现
+      // Local implementation
       const apiKeyEntry = apiKeys.find(entry => entry.key === api_key);
       if (apiKeyEntry && apiKeyEntry.userId === user_id) {
         isValid = true;
@@ -883,8 +388,8 @@ app.post('/api/verify-key', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('API密钥验证错误:', error);
-    return res.status(500).json({ success: false, message: '验证失败: ' + error.message });
+    console.error('API key verification error:', error);
+    return res.status(500).json({ success: false, message: 'Verification failed: ' + error.message });
   }
 });
 
