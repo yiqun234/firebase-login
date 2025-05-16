@@ -177,7 +177,26 @@
                 }
               } else {
                 if (data.email_verified === false) {
-                  statusEl.innerHTML = `<div class="alert alert-danger">${data.message}<br>请检查您的邮箱（包括垃圾邮件文件夹）并点击验证链接。如果您没有收到邮件，可以尝试重新注册或联系支持。</div>`;
+                  let resendButtonHtml = `<button id="resendVerificationEmailBtn" class="btn btn-warning btn-sm mt-2">重新发送验证邮件</button>`;
+                  statusEl.innerHTML = `<div class="alert alert-danger">${data.message}<br>如果您没有收到邮件，可以尝试重新发送。</div>${resendButtonHtml}`;
+                  
+                  document.getElementById('resendVerificationEmailBtn').addEventListener('click', async () => {
+                    try {
+                      // Get the currently signed-in user (even if email is not verified, 
+                      // signInWithEmailAndPassword would have set auth.currentUser if credentials were valid)
+                      const user = auth.currentUser;
+                      if (user) {
+                        await user.sendEmailVerification();
+                        statusEl.innerHTML = '<div class="alert alert-info">新的验证邮件已发送。请检查您的邮箱（包括垃圾邮件文件夹）。</div>';
+                      } else {
+                        // This case might happen if the session was lost or if signInWithEmailAndPassword failed before this point for other reasons.
+                        statusEl.innerHTML = '<div class="alert alert-danger">无法确定当前用户以重新发送邮件。请尝试重新登录，如果问题持续，请联系支持。</div>';
+                      }
+                    } catch (err) {
+                      console.error("Error resending verification email:", err);
+                      statusEl.innerHTML = `<div class="alert alert-danger">重新发送验证邮件失败: ${err.message}</div>`;
+                    }
+                  });
                 } else {
                   statusEl.innerHTML = `<div class="alert alert-danger">${data.message || '登录失败，请检查您的凭据或网络连接。'}</div>`;
                 }
@@ -190,6 +209,7 @@
                   case 'auth/user-not-found':
                   case 'auth/wrong-password':
                   case 'auth/invalid-credential':
+                  case 'auth/invalid-login-credentials':
                     errorMessage = '邮箱或密码错误。';
                     break;
                   case 'auth/invalid-email':

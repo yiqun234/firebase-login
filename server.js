@@ -119,15 +119,61 @@ app.post('/api/register', async (req, res) => {
     if (admin) {
       // Firebase implementation
       try {
-        existingUser = await admin.auth().getUserByEmail(email);
+        existingUser = await admin.auth().getUserByEmail(email).catch(error => {
+          if (error.code === 'auth/user-not-found') {
+            return null; // User does not exist, proceed with registration
+          }
+          throw error; // Other errors
+        });
+
         if (existingUser) {
           return res.status(400).json({ success: false, message: 'Email is already registered' });
         }
+
+        const userRecord = await admin.auth().createUser({
+          email: email,
+          password: password,
+          emailVerified: false // Firebase will automatically send a verification email
+        });
+        const userId = userRecord.uid;
+
+        // Firebase Auth automatically sends a verification email because emailVerified is false.
+        // Ensure your Firebase project's email templates (Authentication -> Templates) are enabled 
+        // and the "Action URL" is configured appropriately.
+        console.log(`User ${email} created. Firebase should automatically send a verification email.`);
+        
+        const db = admin.firestore();
+        
+        // Generate API key
+        const apiKey = `ea_${uuidv4()}`;
+        
+        await db.collection('users').doc(userId).set({
+          email: email,
+          apiKey: apiKey,
+          emailVerified: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        await db.collection('api_keys').doc(apiKey).set({
+          userId: userId,
+          status: 'active',
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Return response
+        return res.status(200).json({ 
+          success: true, 
+          message: 'Registration successful. Firebase will send a verification email to your address (please also check your spam folder).',
+          user_id: userId,
+          api_key: apiKey
+        });
+        
       } catch (error) {
-        // User does not exist, can proceed with registration
-        if (error.code !== 'auth/user-not-found') {
-          throw error;
-        }
+        console.error('Firebase registration error:', error);
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Registration failed: ' + error.message
+        });
       }
     } else {
       // Local implementation
@@ -135,83 +181,6 @@ app.post('/api/register', async (req, res) => {
       if (existingUser) {
         return res.status(400).json({ success: false, message: 'Email is already registered' });
       }
-    }
-    
-    // Create user
-    let userId, hashedPassword;
-    
-    if (admin) {
-      // Firebase implementation
-      const userRecord = await admin.auth().createUser({
-        email: email,
-        password: password,
-        emailVerified: false // User needs to verify email
-      });
-      userId = userRecord.uid;
-      
-      // Send verification email
-      const verificationLink = await admin.auth().generateEmailVerificationLink(email);
-      console.log(`Verification email link generated for ${email}: ${verificationLink}`);
-      
-      // In a production environment, you would send this email to the user
-      // For now, log it to console for testing purposes
-      console.log(`Please verify your email using this link: ${verificationLink}`);
-      
-      // Store user data in Firestore
-      const db = admin.firestore();
-      
-      // Generate API key
-      const apiKey = `ea_${uuidv4()}`;
-      
-      await db.collection('users').doc(userId).set({
-        email: email,
-        apiKey: apiKey,
-        emailVerified: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-      
-      await db.collection('api_keys').doc(apiKey).set({
-        userId: userId,
-        status: 'active',
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-      
-      // Return response
-      return res.status(200).json({ 
-        success: true, 
-        message: 'Registration successful. Firebase will send a verification email to your address (please also check your spam folder).',
-        user_id: userId,
-        api_key: apiKey
-      });
-      
-    } else {
-      // Local implementation
-      hashedPassword = await bcrypt.hash(password, 10);
-      userId = uuidv4();
-      const apiKey = `ea_${uuidv4()}`;
-      
-      // Store user
-      users.push({
-        id: userId,
-        email,
-        password: hashedPassword,
-        apiKey,
-        emailVerified: false
-      });
-      
-      // Store API key mapping
-      apiKeys.push({
-        key: apiKey,
-        userId
-      });
-      
-      // Return response
-      return res.status(200).json({ 
-        success: true, 
-        message: 'Registration successful. In local mode, email verification is simulated.',
-        user_id: userId,
-        api_key: apiKey
-      });
     }
     
   } catch (error) {
