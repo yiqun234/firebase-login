@@ -90,6 +90,15 @@
                     Sign in with Google
                   </button>
                 </div>
+                <div class="d-grid gap-2 mt-2">
+                  <button type="button" class="btn btn-secondary" id="guestSignInBtn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-person-circle me-2" viewBox="0 0 16 16">
+                      <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
+                      <path fill-rule="evenodd" d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm8-7a7 7 0 0 0-5.468 11.37C3.242 11.226 4.805 10 8 10s4.757 1.225 5.468 2.37A7 7 0 0 0 8 1z"/>
+                    </svg>
+                    Login as Guest
+                  </button>
+                </div>
               </div>
               <div id="loginStatus" class="status-message"></div>
               
@@ -335,6 +344,51 @@
           });
         } else {
             console.error("Google Sign-In button not found");
+        }
+        
+        // Guest Sign-In button handler
+        const guestSignInBtn = document.getElementById('guestSignInBtn');
+        if (guestSignInBtn) {
+            guestSignInBtn.addEventListener('click', async () => {
+                const originalButtonText = guestSignInBtn.innerHTML;
+                guestSignInBtn.disabled = true;
+                guestSignInBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Entering as Guest...';
+
+                const statusEl = document.getElementById('loginStatus');
+                statusEl.innerHTML = '<div class="alert alert-info">Signing in as guest...</div>';
+
+                try {
+                    const userCredential = await auth.signInAnonymously();
+                    const user = userCredential.user;
+
+                    if (user) {
+                        const idToken = await user.getIdToken();
+                        const response = await fetch('/api/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ idToken: idToken })
+                        });
+                        const data = await response.json();
+
+                        if (data.success) {
+                            statusEl.innerHTML = '<div class="alert alert-success">Guest login successful! Redirecting...</div>';
+                            const callbackUrl = getCallbackUrl();
+                            if (callbackUrl) {
+                                window.location.href = `/auth/callback?user_id=${data.user_id}&api_key=${data.api_key}`;
+                            } else {
+                                statusEl.innerHTML = '<div class="alert alert-warning">Callback URL not provided, cannot complete guest login.</div>';
+                            }
+                        } else {
+                            statusEl.innerHTML = `<div class="alert alert-danger">${data.message || 'Guest login failed on backend.'}</div>`;
+                        }
+                    }
+                } catch (error) {
+                    console.error("Anonymous Sign-In Error:", error);
+                    statusEl.innerHTML = `<div class="alert alert-danger">Anonymous sign-in failed: ${error.message}</div>`;
+                }
+                guestSignInBtn.disabled = false;
+                guestSignInBtn.innerHTML = originalButtonText;
+            });
         }
         
         // 注册表单提交处理

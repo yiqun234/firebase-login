@@ -223,7 +223,9 @@ app.post('/api/login', async (req, res) => {
       try {
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         userId = decodedToken.uid;
-        userEmail = decodedToken.email;
+        // Handle email for anonymous users: it will be null.
+        userEmail = decodedToken.email || null; // Explicitly set to null if undefined
+        const signInProvider = decodedToken.firebase.sign_in_provider;
         
         // For Google sign-in, email is typically already verified by Google.
         // If you have specific policies for your app even for verified emails, check them here.
@@ -248,14 +250,16 @@ app.post('/api/login', async (req, res) => {
           
           apiKey = `ea_${uuidv4()}`;
           const newUserFirestoreData = {
-            email: userEmail,
+            email: userEmail, // This will be null for anonymous users
             apiKey: apiKey,
-            emailVerified: decodedToken.email_verified, // Should be true for Google
+            // For anonymous users, email_verified is not applicable in the same way,
+            // but we can set it based on decodedToken or simply false/null.
+            emailVerified: decodedToken.email_verified || (signInProvider === 'anonymous' ? null : false),
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            // You might want to add a field to indicate the provider, e.g., provider: decodedToken.firebase.sign_in_provider
+            provider: signInProvider // Store the sign-in provider
           };
 
-          await db.collection('users').doc(userId).set(newUserFirestoreData, { merge: true }); // Use merge:true to be safe
+          await db.collection('users').doc(userId).set(newUserFirestoreData, { merge: true }); 
           
           await db.collection('api_keys').doc(apiKey).set({
             userId: userId,
