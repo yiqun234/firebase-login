@@ -138,12 +138,14 @@
     // 登录表单提交处理
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+      console.log("Login form submitted, preventDefault called."); // 确认这行被执行
       
       const email = document.getElementById('loginEmail').value;
       const password = document.getElementById('loginPassword').value;
       const statusEl = document.getElementById('loginStatus');
       
       statusEl.innerHTML = '<div class="alert alert-info">正在登录...</div>';
+      console.log("Attempting Firebase sign-in with email:", email);
       
       try {
         // Step 1: Sign in with Firebase client SDK
