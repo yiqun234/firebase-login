@@ -539,6 +539,155 @@ Important rules:
   }
 });
 
+// Extract structured data from resume API
+app.post('/api/extract-from-resume', async (req, res) => {
+  try {
+    const {
+      resumeText,
+      options = [],
+      structure,
+      useProxy,
+      proxyUrl,
+      metadata,
+      openai_api_key
+    } = req.body;
+
+    // Check resume text
+    if (!resumeText || resumeText.trim().length === 0) {
+      return res.status(400).json({ error: 'Resume text is empty' });
+    }
+    // Check structure definition
+    if (!structure) {
+      return res.status(400).json({ error: 'No structure definition provided' });
+    }
+
+    // OpenAI config
+    const openaiConfig = {
+      apiKey: openai_api_key || process.env.OPENAI_API_KEY,
+    };
+    if (!openaiConfig.apiKey) {
+      return res.status(400).json({ error: 'OpenAI API key not configured' });
+    }
+
+    const openai = new OpenAI(openaiConfig);
+
+    // Build system prompt (English)
+    const systemPrompt = `You are a professional resume analyst. Extract information from the provided resume without fabricating content. Use intelligent inference:
+1. For skill experience, analyze from work history, do not simply return 0 years unless it is clearly a new skill.
+2. For dates not explicitly mentioned, provide a reasonable inference.
+3. For country/region codes, infer based on location information in the resume.
+4. Accurately calculate years of experience based on work periods.
+5. For all extracted information, provide a confidence score (1-10, 10 means fully certain).
+Output strictly in the user-specified JSON structure.`;
+
+    let userPrompt = `Extract information from the following resume, using intelligent inference and analysis.`;
+    userPrompt += `\n\nResume Content:\n${resumeText}\n\n`;
+    userPrompt += `Please extract and deeply analyze the following:`;
+
+    // Helper to build field prompt
+    const buildFieldPrompt = (fieldName, description, specificInstructions = "") => {
+      let promptPart = `- ${description}`;
+      if (metadata && metadata[fieldName] && metadata[fieldName].options && metadata[fieldName].options.length > 0) {
+        promptPart += ` For ${metadata[fieldName].label || fieldName}, please mainly select from these preset options: [${metadata[fieldName].options.join(', ')}].`;
+      }
+      if (specificInstructions) {
+        promptPart += " " + specificInstructions;
+      }
+      promptPart += "\n";
+      return promptPart;
+    };
+
+    if (options.includes('languages')) {
+      userPrompt += buildFieldPrompt(
+        'languages',
+        'Languages: Extract mentioned languages and proficiency, assess confidence.',
+        metadata?.languages?.label ? `For proficiency, refer to the preset options of ${metadata.languages.label}.` : ''
+      );
+    }
+    if (options.includes('skills')) {
+      userPrompt += buildFieldPrompt(
+        'skills',
+        'Skills: Extract skills from the resume and analyze actual years of experience for each skill from work history. Do not return 0 years unless it is a new skill.'
+      );
+    }
+    if (options.includes('personal_info')) {
+      let piInstructions = 'Extract name, phone, email, address, country/region, etc. For country_code, use standard two-letter codes (e.g., US, CN), not full format. The system will convert to full format.';
+      if (metadata?.personal_info?.fields?.country_code?.options) {
+        piInstructions += ` For country code, the system will match the full format from the preset options of ${metadata.personal_info.fields.country_code.label || 'country_code'}.`;
+      }
+      userPrompt += buildFieldPrompt('personal_info', `Personal Info: ${piInstructions}`);
+    }
+    if (options.includes('eeo')) {
+      let eeoInstructions = 'For gender, ethnicity, veteran status, etc., only extract if explicitly mentioned, otherwise provide reasonable inference. For veteran and disability fields, use lowercase "yes" or "no".';
+      if (metadata?.eeo?.fields) {
+        for (const key in metadata.eeo.fields) {
+          if (metadata.eeo.fields[key].options && metadata.eeo.fields[key].options.length > 0) {
+            eeoInstructions += ` For ${metadata.eeo.fields[key].label || key}, select from options [${metadata.eeo.fields[key].options.join(', ')}].`;
+          }
+        }
+      }
+      userPrompt += buildFieldPrompt('eeo', `Diversity Info: ${eeoInstructions}`);
+    }
+    if (options.includes('salary')) {
+      userPrompt += buildFieldPrompt('salary', 'Expected Salary: If mentioned, extract the value and period (annual/monthly/hourly).');
+    }
+    if (options.includes('work_experience')) {
+      let weInstructions = 'Extract company, title, location, start/end dates, responsibilities, and calculate duration for each job. For missing months, provide reasonable inference. Each work experience must include city; if not explicit, infer from company and context.';
+      if (metadata?.work_experience?.fields?.month?.options) {
+        weInstructions += ` For month, refer to the preset options of ${metadata.work_experience.fields.month.label || 'month'} (numeric format).`;
+      }
+      userPrompt += buildFieldPrompt('work_experience', `Work Experience: ${weInstructions}`);
+    }
+    if (options.includes('education')) {
+      let eduInstructions = 'Extract school, degree, major, location, start/end dates. For missing months, provide reasonable inference. Each education entry must include city; if not explicit, infer from school and context.';
+      if (metadata?.education?.fields?.degree?.options) {
+        eduInstructions += ` For degree, refer to the preset options of ${metadata.education.fields.degree.label || 'degree'}.`;
+      }
+      if (metadata?.education?.fields?.month?.options) {
+        eduInstructions += ` For month, refer to the preset options of ${metadata.education.fields.month.label || 'month'} (numeric format).`;
+      }
+      userPrompt += buildFieldPrompt('education', `Education: ${eduInstructions}`);
+    }
+
+    userPrompt += `\nPlease strictly reply in the following JSON structure. Ensure all content matches the original resume, do not fabricate:`;
+    userPrompt += `\n${JSON.stringify(structure, null, 2)}`;
+    userPrompt += `\n\nInclude only the selected options. If no relevant info is found, use empty array/object for the field. For all fields, add a confidence field (1-10) indicating certainty.`;
+    userPrompt += `\n\nFor months in work and education, use numbers (1-12). If not explicit, provide the best inference and lower the confidence.`;
+
+    // Call OpenAI API
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 2500
+    });
+
+    const content = completion.choices[0].message.content;
+
+    // Try to extract JSON from response
+    let aiResult;
+    try {
+      const jsonMatch = content.match(/({[\s\S]*})/);
+      let jsonContent = jsonMatch ? jsonMatch[0] : content;
+      jsonContent = jsonContent.replace(/```json|```/g, '').trim();
+      aiResult = JSON.parse(jsonContent);
+    } catch (jsonError) {
+      console.error('JSON parse error:', jsonError);
+      console.error('Original AI response:', content);
+      return res.status(500).json({ error: 'Failed to parse JSON from AI response. See server logs for details.' });
+    }
+
+    // Return result
+    res.json(aiResult);
+  } catch (error) {
+    console.error('Extract-from-resume error:', error);
+    res.status(500).json({ error: error.message || 'Server error' });
+  }
+});
+
 // Start server
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
