@@ -114,144 +114,165 @@
   
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    // Firebase configuration (REPLACE WITH YOUR ACTUAL CONFIG)
-    const firebaseConfig = {
-      apiKey: "AIzaSyAeHptX0vuZVy1Oos_LyOSjtoVTU4b6m9s",
-      authDomain: "easy-apply-bot.firebaseapp.com",
-      projectId: "easy-apply-bot",
-      storageBucket: "easy-apply-bot.firebasestorage.app",
-      messagingSenderId: "40362191929",
-      appId: "1:40362191929:web:cbfec3cafe37f6e85f31e8",
-      measurementId: "G-B4JTE653K5"
-    };
+    // Function to initialize Firebase and set up event listeners
+    function initializeAppAndAuth() {
+      // Firebase configuration
+      const firebaseConfig = {
+        apiKey: "AIzaSyAeHptX0vuZVy1Oos_LyOSjtoVTU4b6m9s",
+        authDomain: "easy-apply-bot.firebaseapp.com",
+        projectId: "easy-apply-bot",
+        storageBucket: "easy-apply-bot.firebasestorage.app",
+        messagingSenderId: "40362191929",
+        appId: "1:40362191929:web:cbfec3cafe37f6e85f31e8",
+        measurementId: "G-B4JTE653K5"
+      };
 
-    // Initialize Firebase
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
+      // Initialize Firebase
+      try {
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        console.log("Firebase initialized successfully.");
 
-    // 获取回调URL参数
-    function getCallbackUrl() {
-      const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get('callback');
+        // 获取回调URL参数
+        function getCallbackUrl() {
+          const urlParams = new URLSearchParams(window.location.search);
+          return urlParams.get('callback');
+        }
+        
+        // 登录表单提交处理
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm) {
+            loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log("Login form submitted, preventDefault called."); 
+            
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const statusEl = document.getElementById('loginStatus');
+            
+            statusEl.innerHTML = '<div class="alert alert-info">正在登录...</div>';
+            console.log("Attempting Firebase sign-in with email:", email);
+            
+            try {
+              const userCredential = await auth.signInWithEmailAndPassword(email, password);
+              const user = userCredential.user;
+
+              const idToken = await user.getIdToken();
+
+              const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ idToken: idToken })
+              });
+              
+              const data = await response.json();
+              
+              if (data.success) {
+                statusEl.innerHTML = '<div class="alert alert-success">登录成功！正在重定向...</div>';
+                const callbackUrl = getCallbackUrl();
+                if (callbackUrl) {
+                  window.location.href = `/auth/callback?user_id=${data.user_id}&api_key=${data.api_key}`;
+                } else {
+                  statusEl.innerHTML = '<div class="alert alert-warning">未提供回调地址，无法完成登录流程</div>';
+                }
+              } else {
+                if (data.email_verified === false) {
+                  statusEl.innerHTML = `<div class="alert alert-danger">${data.message}<br>请检查您的邮箱（包括垃圾邮件文件夹）并点击验证链接。如果您没有收到邮件，可以尝试重新注册或联系支持。</div>`;
+                } else {
+                  statusEl.innerHTML = `<div class="alert alert-danger">${data.message || '登录失败，请检查您的凭据或网络连接。'}</div>`;
+                }
+              }
+            } catch (error) {
+              console.error('登录错误:', error);
+              let errorMessage = '登录失败，请稍后重试。';
+              if (error.code) {
+                switch (error.code) {
+                  case 'auth/user-not-found':
+                  case 'auth/wrong-password':
+                  case 'auth/invalid-credential':
+                    errorMessage = '邮箱或密码错误。';
+                    break;
+                  case 'auth/invalid-email':
+                    errorMessage = '邮箱格式不正确。';
+                    break;
+                  case 'auth/user-disabled':
+                    errorMessage = '该账户已被禁用。';
+                    break;
+                  default:
+                    errorMessage = `登录时发生错误: ${error.message}`;
+                }
+              }
+              statusEl.innerHTML = `<div class="alert alert-danger">${errorMessage}</div>`;
+            }
+          });
+        } else {
+            console.error("Login form not found");
+        }
+        
+        // 注册表单提交处理
+        const registerForm = document.getElementById('registerForm');
+        if (registerForm) {
+            registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const statusEl = document.getElementById('registerStatus');
+            
+            if (password !== confirmPassword) {
+              statusEl.innerHTML = '<div class="alert alert-danger">两次输入的密码不一致</div>';
+              return;
+            }
+            
+            statusEl.innerHTML = '<div class="alert alert-info">正在注册...</div>';
+            
+            try {
+              const response = await fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+              });
+              
+              const data = await response.json();
+              
+              if (data.success) {
+                statusEl.innerHTML = '<div class="alert alert-success">注册成功！Firebase将发送验证邮件，请检查邮箱并点击链接验证。</div>'; // 更明确的提示
+                // 在注册成功后，通常不需要立即重定向到 callback，因为用户需要先验证邮箱。
+                // const callbackUrl = getCallbackUrl();
+                // if (callbackUrl) {
+                // window.location.href = `/auth/callback?user_id=${data.user_id}&api_key=${data.api_key}`;
+                // } else {
+                // statusEl.innerHTML = '<div class="alert alert-warning">未提供回调地址，但注册请求已发送。请先验证邮箱。</div>';
+                // }
+              } else {
+                statusEl.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+              }
+            } catch (error) {
+              console.error('注册错误:', error);
+              statusEl.innerHTML = `<div class="alert alert-danger">注册失败: ${error.message}</div>`;
+            }
+          });
+        } else {
+            console.error("Register form not found");
+        }
+
+      } catch (e) {
+        console.error("Firebase initialization failed:", e);
+        // Display a user-friendly message if Firebase fails to initialize
+        const loginStatus = document.getElementById('loginStatus');
+        if (loginStatus) loginStatus.innerHTML = '<div class="alert alert-danger">系统初始化失败，请刷新页面或稍后再试。</div>';
+        const registerStatus = document.getElementById('registerStatus');
+        if (registerStatus) registerStatus.innerHTML = '<div class="alert alert-danger">系统初始化失败，请刷新页面或稍后再试。</div>';
+      }
     }
-    
-    // 登录表单提交处理
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      console.log("Login form submitted, preventDefault called."); // 确认这行被执行
-      
-      const email = document.getElementById('loginEmail').value;
-      const password = document.getElementById('loginPassword').value;
-      const statusEl = document.getElementById('loginStatus');
-      
-      statusEl.innerHTML = '<div class="alert alert-info">正在登录...</div>';
-      console.log("Attempting Firebase sign-in with email:", email);
-      
-      try {
-        // Step 1: Sign in with Firebase client SDK
-        const userCredential = await auth.signInWithEmailAndPassword(email, password);
-        const user = userCredential.user;
 
-        // Step 2: Get ID token
-        const idToken = await user.getIdToken();
-
-        // Step 3: Send ID token to your backend
-        const response = await fetch('/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idToken: idToken }) // Send idToken
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-          statusEl.innerHTML = '<div class="alert alert-success">登录成功！正在重定向...</div>';
-          
-          // 获取回调URL
-          const callbackUrl = getCallbackUrl();
-          if (callbackUrl) {
-            // 重定向到回调处理页面
-            window.location.href = `/auth/callback?user_id=${data.user_id}&api_key=${data.api_key}`;
-          } else {
-            statusEl.innerHTML = '<div class="alert alert-warning">未提供回调地址，无法完成登录流程</div>';
-          }
-        } else {
-          // Handle specific error for email not verified
-          if (data.email_verified === false) {
-             statusEl.innerHTML = `<div class="alert alert-danger">${data.message}<br>请检查您的邮箱（包括垃圾邮件文件夹）并点击验证链接。如果您没有收到邮件，可以尝试重新注册或联系支持。</div>`;
-          } else {
-            statusEl.innerHTML = `<div class="alert alert-danger">${data.message || '登录失败，请检查您的凭据或网络连接。'}</div>`;
-          }
-        }
-      } catch (error) {
-        console.error('登录错误:', error);
-        let errorMessage = '登录失败，请稍后重试。';
-        if (error.code) {
-          switch (error.code) {
-            case 'auth/user-not-found':
-            case 'auth/wrong-password':
-            case 'auth/invalid-credential': // For newer SDK versions
-              errorMessage = '邮箱或密码错误。';
-              break;
-            case 'auth/invalid-email':
-              errorMessage = '邮箱格式不正确。';
-              break;
-            case 'auth/user-disabled':
-              errorMessage = '该账户已被禁用。';
-              break;
-            default:
-              errorMessage = `登录时发生错误: ${error.message}`;
-          }
-        }
-        statusEl.innerHTML = `<div class="alert alert-danger">${errorMessage}</div>`;
-      }
-    });
-    
-    // 注册表单提交处理
-    document.getElementById('registerForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      const email = document.getElementById('registerEmail').value;
-      const password = document.getElementById('registerPassword').value;
-      const confirmPassword = document.getElementById('confirmPassword').value;
-      const statusEl = document.getElementById('registerStatus');
-      
-      if (password !== confirmPassword) {
-        statusEl.innerHTML = '<div class="alert alert-danger">两次输入的密码不一致</div>';
-        return;
-      }
-      
-      statusEl.innerHTML = '<div class="alert alert-info">正在注册...</div>';
-      
-      try {
-        // 发送注册请求
-        const response = await fetch('/api/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-          statusEl.innerHTML = '<div class="alert alert-success">注册成功！正在重定向...</div>';
-          
-          // 获取回调URL
-          const callbackUrl = getCallbackUrl();
-          if (callbackUrl) {
-            // 重定向到回调处理页面
-            window.location.href = `/auth/callback?user_id=${data.user_id}&api_key=${data.api_key}`;
-          } else {
-            statusEl.innerHTML = '<div class="alert alert-warning">未提供回调地址，无法完成注册流程</div>';
-          }
-        } else {
-          statusEl.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
-        }
-      } catch (error) {
-        console.error('注册错误:', error);
-        statusEl.innerHTML = `<div class="alert alert-danger">注册失败: ${error.message}</div>`;
-      }
-    });
+    // Ensure DOM is fully loaded before trying to initialize Firebase and attach listeners
+    if (document.readyState === 'loading') {  // Loading hasn't finished yet
+      document.addEventListener('DOMContentLoaded', initializeAppAndAuth);
+    } else {  // `DOMContentLoaded` has already fired
+      initializeAppAndAuth();
+    }
   </script>
 </body>
 </html> 
