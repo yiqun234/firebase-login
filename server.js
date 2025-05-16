@@ -179,7 +179,7 @@ app.post('/api/register', async (req, res) => {
       // Return response
       return res.status(200).json({ 
         success: true, 
-        message: 'Registration successful. Please check your email to verify your account.',
+        message: 'Registration successful. Firebase will send a verification email to your address (please also check your spam folder).',
         user_id: userId,
         api_key: apiKey
       });
@@ -241,87 +241,88 @@ app.post('/api/login', async (req, res) => {
       });
     }
     
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ success: false, message: 'Email and password cannot be empty' });
-    }
+    const { email, password, idToken } = req.body; // email, password for local; idToken for Firebase
     
-    let userId, apiKey;
+    let userId, apiKey, userEmail; // Removed isEmailVerified as it comes from decodedToken
     
     if (admin) {
-      // Firebase implementation
+      // Firebase implementation: Verify ID Token from client
+      if (!idToken) {
+        return res.status(400).json({ success: false, message: 'Firebase ID Token is required for Firebase login.' });
+      }
+      
       try {
-        // Method 1: Using Firebase Auth REST API (requires Firebase API Key)
-        // Using Method 2 instead, because Method 1 requires using Firebase SDK on frontend
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        userId = decodedToken.uid;
+        userEmail = decodedToken.email;
         
-        // Method 2: Using Firebase Admin to find user, but need separate password verification
-        const userRecord = await admin.auth().getUserByEmail(email);
-        userId = userRecord.uid;
-        
-        // Check if email is verified
-        if (!userRecord.emailVerified) {
-          // Generate a new verification email link
-          const verificationLink = await admin.auth().generateEmailVerificationLink(email);
-          console.log(`Re-sending verification email link for ${email}: ${verificationLink}`);
-          
+        if (!decodedToken.email_verified) {
           return res.status(401).json({ 
             success: false, 
-            message: 'Email not verified. Please check your inbox or spam folder for verification email.',
+            message: 'Email not verified. Please check your inbox (and spam folder) for the verification email. Click the link in the email to verify your account before logging in.',
             email_verified: false
           });
         }
         
-        // Get user's API key
+        // Email is verified, proceed to get API key from Firestore
         const db = admin.firestore();
         const userDoc = await db.collection('users').doc(userId).get();
         
-        if (!userDoc.exists) {
-          return res.status(400).json({ success: false, message: 'User data does not exist' });
+        if (!userDoc.exists || !userDoc.data().apiKey) {
+          console.error(`User data or API key not found in Firestore for user ID: ${userId}`);
+          // It's possible the user exists in Firebase Auth but not in your Firestore 'users' collection
+          // This might happen if Firestore write failed during registration or data inconsistency
+          // You might want to handle this case, e.g., by attempting to re-create the Firestore entry or guiding the user.
+          return res.status(400).json({ success: false, message: 'User data or API key not found in our records. Please try registering again or contact support.' });
         }
         
-        const userData = userDoc.data();
-        apiKey = userData.apiKey;
+        apiKey = userDoc.data().apiKey;
         
-        // Note: This method cannot actually verify Firebase user's password
-        // In a real application, should use Firebase client SDK for authentication
-        // For simplicity, we assume password verification passed
-        
-        // Create JWT token
-        const token = jwt.sign(
-          { user_id: userId, email },
+        // Create your application's JWT token (this is separate from Firebase's ID token)
+        const appSpecificJwtToken = jwt.sign(
+          { user_id: userId, email: userEmail },
           JWT_SECRET,
           { expiresIn: '7d' }
         );
         
         return res.json({
           success: true,
-          message: 'Login successful',
+          message: 'Login successful.',
           user_id: userId,
           api_key: apiKey,
-          token,
+          token: appSpecificJwtToken, // Your app's session token
           email_verified: true
         });
         
       } catch (error) {
-        console.error('Firebase login error:', error);
-        return res.status(400).json({ 
+        console.error('Firebase ID Token verification or login error:', error);
+        if (error.code === 'auth/id-token-expired') {
+          return res.status(401).json({ success: false, message: 'Login session expired. Please log in again.'});
+        }
+        if (error.code === 'auth/id-token-revoked') {
+            return res.status(401).json({ success: false, message: 'Login session has been revoked. Please log in again.' });
+        }
+        // Other errors like 'auth/argument-error' (malformed token) or 'auth/user-disabled'
+        return res.status(401).json({ 
           success: false, 
-          message: 'Login failed: Email or password is incorrect'
+          message: 'Login failed: Invalid or expired Firebase session. Error: ' + error.message 
         });
       }
     } else {
-      // Local implementation
-      const user = users.find(user => user.email === email);
+      // Local implementation (remains the same, assuming it's correct for local mode)
+      if (!email || !password) {
+        return res.status(400).json({ success: false, message: 'Email and password cannot be empty for local login' });
+      }
+      const user = users.find(u => u.email === email);
       if (!user) {
-        return res.status(400).json({ success: false, message: 'Email or password is incorrect' });
+        return res.status(400).json({ success: false, message: 'Email or password is incorrect (local mode)' });
       }
       
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
-        return res.status(400).json({ success: false, message: 'Email or password is incorrect' });
+        return res.status(400).json({ success: false, message: 'Email or password is incorrect (local mode)' });
       }
       
-      // Check if email is verified in local mode
       if (!user.emailVerified) {
         // In local mode, we'll simulate verification by simply setting it to true
         user.emailVerified = true;
@@ -330,17 +331,17 @@ app.post('/api/login', async (req, res) => {
       
       userId = user.id;
       apiKey = user.apiKey;
+      userEmail = user.email; 
       
-      // Create JWT token
       const token = jwt.sign(
-        { user_id: userId, email },
+        { user_id: userId, email: userEmail },
         JWT_SECRET,
         { expiresIn: '7d' }
       );
       
       return res.json({
         success: true,
-        message: 'Login successful',
+        message: 'Login successful (local mode)',
         user_id: userId,
         api_key: apiKey,
         token,
@@ -349,7 +350,7 @@ app.post('/api/login', async (req, res) => {
     }
     
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Outer Login error:', error);
     return res.status(500).json({ success: false, message: 'Login failed: ' + error.message });
   }
 });
