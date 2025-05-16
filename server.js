@@ -225,29 +225,50 @@ app.post('/api/login', async (req, res) => {
         userId = decodedToken.uid;
         userEmail = decodedToken.email;
         
+        // For Google sign-in, email is typically already verified by Google.
+        // If you have specific policies for your app even for verified emails, check them here.
         if (!decodedToken.email_verified) {
+          // This block might be less common for Google sign-ins but good to have for consistency
           return res.status(401).json({ 
             success: false, 
-            message: 'Email not verified. Please check your inbox (and spam folder) for the verification email. Click the link in the email to verify your account before logging in.',
+            message: 'Email not verified. Please ensure your Google account email is accessible and verified.',
             email_verified: false
           });
         }
         
-        // Email is verified, proceed to get API key from Firestore
         const db = admin.firestore();
-        const userDoc = await db.collection('users').doc(userId).get();
-        
-        if (!userDoc.exists || !userDoc.data().apiKey) {
-          console.error(`User data or API key not found in Firestore for user ID: ${userId}`);
-          // It's possible the user exists in Firebase Auth but not in your Firestore 'users' collection
-          // This might happen if Firestore write failed during registration or data inconsistency
-          // You might want to handle this case, e.g., by attempting to re-create the Firestore entry or guiding the user.
-          return res.status(400).json({ success: false, message: 'User data or API key not found in our records. Please try registering again or contact support.' });
+        let userDoc = await db.collection('users').doc(userId).get();
+        let apiKey;
+
+        if (!userDoc.exists || !userDoc.data() || !userDoc.data().apiKey) {
+          // User exists in Firebase Auth (verified by idToken) but not in our Firestore 'users' collection,
+          // or is missing an API key. This can happen for first-time social logins.
+          // So, we create their record in Firestore and generate an API key.
+          console.log(`User with ID: ${userId} and Email: ${userEmail} not found in Firestore or missing API key. Creating entry.`);
+          
+          apiKey = `ea_${uuidv4()}`;
+          const newUserFirestoreData = {
+            email: userEmail,
+            apiKey: apiKey,
+            emailVerified: decodedToken.email_verified, // Should be true for Google
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            // You might want to add a field to indicate the provider, e.g., provider: decodedToken.firebase.sign_in_provider
+          };
+
+          await db.collection('users').doc(userId).set(newUserFirestoreData, { merge: true }); // Use merge:true to be safe
+          
+          await db.collection('api_keys').doc(apiKey).set({
+            userId: userId,
+            status: 'active',
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+          console.log(`Firestore entry and API key created for user ${userId}`);
+        } else {
+          // User found in Firestore, use existing API key
+          apiKey = userDoc.data().apiKey;
         }
         
-        apiKey = userDoc.data().apiKey;
-        
-        // Create your application's JWT token (this is separate from Firebase's ID token)
+        // Create your application's JWT token
         const appSpecificJwtToken = jwt.sign(
           { user_id: userId, email: userEmail },
           JWT_SECRET,

@@ -81,6 +81,15 @@
                   </div>
                   <div id="loginStatus" class="status-message"></div>
                 </form>
+                <hr class="my-4">
+                <div class="d-grid gap-2">
+                  <button type="button" class="btn btn-danger" id="googleSignInBtn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-google me-2" viewBox="0 0 16 16">
+                      <path d="M15.545 6.558a9.42 9.42 0 0 1 .139 1.626c0 2.434-.87 4.492-2.384 5.885h.002C11.978 15.292 10.158 16 8 16A8 8 0 1 1 8 0a7.689 7.689 0 0 1 5.352 2.082l-2.284 2.284A4.347 4.347 0 0 0 8 3.166c-2.087 0-3.86 1.408-4.492 3.304a4.792 4.792 0 0 0 0 3.063h.003c.635 1.893 2.405 3.301 4.492 3.301 1.078 0 2.004-.276 2.722-.764h-.003a3.702 3.702 0 0 0 1.599-2.431H8v-3.08h7.545z"/>
+                    </svg>
+                    Sign in with Google
+                  </button>
+                </div>
               </div>
               
               <!-- 注册表单 -->
@@ -132,6 +141,9 @@
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         console.log("Firebase initialized successfully.");
+
+        // Google Auth Provider
+        const googleProvider = new firebase.auth.GoogleAuthProvider();
 
         // 获取回调URL参数
         function getCallbackUrl() {
@@ -226,6 +238,77 @@
           });
         } else {
             console.error("Login form not found");
+        }
+        
+        // Google Sign-In button handler
+        const googleSignInBtn = document.getElementById('googleSignInBtn');
+        if (googleSignInBtn) {
+          googleSignInBtn.addEventListener('click', async () => {
+            const statusEl = document.getElementById('loginStatus'); // Use login status for messages
+            statusEl.innerHTML = '<div class="alert alert-info">Redirecting to Google Sign-In...</div>';
+            try {
+              const result = await auth.signInWithPopup(googleProvider);
+              // This gives you a Google Access Token. You can use it to access the Google API.
+              // const credential = result.credential;
+              // const token = credential.accessToken;
+              // The signed-in user info.
+              const user = result.user;
+              
+              if (user) {
+                const idToken = await user.getIdToken();
+                // Send this idToken to your backend for verification and user handling
+                const response = await fetch('/api/login', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ idToken: idToken })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                  statusEl.innerHTML = '<div class="alert alert-success">Google Sign-In successful! Redirecting...</div>';
+                  const callbackUrl = getCallbackUrl();
+                  if (callbackUrl) {
+                    window.location.href = `/auth/callback?user_id=${data.user_id}&api_key=${data.api_key}`;
+                  } else {
+                    statusEl.innerHTML = '<div class="alert alert-warning">Callback URL not provided, cannot complete login process.</div>';
+                  }
+                } else {
+                  // Handle cases like email not verified if your backend enforces that for Google sign-ins too,
+                  // or other backend errors.
+                   if (data.email_verified === false) { // Though for Google, email is typically pre-verified
+                        statusEl.innerHTML = `<div class="alert alert-danger">${data.message}<br>Please ensure your Google account email is accessible.</div>`;
+                    } else {
+                        statusEl.innerHTML = `<div class="alert alert-danger">${data.message || 'Google Sign-In failed on backend.'}</div>`;
+                    }
+                }
+              } else {
+                statusEl.innerHTML = '<div class="alert alert-warning">Google Sign-In was cancelled or failed.</div>';
+              }
+            } catch (error) {
+              console.error("Google Sign-In Error:", error);
+              let errorMessage = 'Google Sign-In failed. Please try again.';
+              if (error.code) {
+                switch (error.code) {
+                  case 'auth/popup-closed-by-user':
+                    errorMessage = 'Google Sign-In popup was closed before completion.';
+                    break;
+                  case 'auth/cancelled-popup-request':
+                  case 'auth/popup-blocked':
+                     errorMessage = 'Google Sign-In popup was blocked by the browser. Please allow popups for this site.';
+                     break;
+                  case 'auth/account-exists-with-different-credential':
+                    errorMessage = 'An account already exists with the same email address but different sign-in credentials. Sign in using a provider associated with this email address.';
+                    break;
+                  // Add other specific error codes if needed
+                  default:
+                    errorMessage = `Google Sign-In error: ${error.message}`;
+                }
+              }
+              statusEl.innerHTML = `<div class="alert alert-danger">${errorMessage}</div>`;
+            }
+          });
+        } else {
+            console.error("Google Sign-In button not found");
         }
         
         // 注册表单提交处理
