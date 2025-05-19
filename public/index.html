@@ -38,6 +38,10 @@
       min-height: 50px;
       margin-top: 15px;
     }
+    /* Add more specific selectors if needed for dynamic text */
+    [data-translate] {
+        /* Style for elements that will be translated, if needed */
+    }
   </style>
 </head>
 <body>
@@ -46,19 +50,19 @@
       <div class="col-md-8">
         <div class="card auth-card">
           <div class="card-body text-center pt-4 pb-5">
-            <h2 class="mb-4">EasyApply</h2>
-            <p class="text-muted mb-4">Please log in or register to continue using EasyApply</p>
+            <h2 class="mb-4" data-translate="title">EasyApply</h2>
+            <p class="text-muted mb-4" data-translate="subtitle">Please log in or register to continue using EasyApply</p>
             
             <ul class="nav nav-tabs justify-content-center mb-4" id="authTabs" role="tablist">
               <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="login-tab" data-bs-toggle="tab" data-bs-target="#login" 
-                        type="button" role="tab" aria-controls="login" aria-selected="true">
+                        type="button" role="tab" aria-controls="login" aria-selected="true" data-translate="loginTab">
                   Login
                 </button>
               </li>
               <li class="nav-item" role="presentation">
                 <button class="nav-link" id="register-tab" data-bs-toggle="tab" data-bs-target="#register" 
-                        type="button" role="tab" aria-controls="register" aria-selected="false">
+                        type="button" role="tab" aria-controls="register" aria-selected="false" data-translate="registerTab">
                   Register
                 </button>
               </li>
@@ -69,15 +73,15 @@
               <div class="tab-pane fade show active" id="login" role="tabpanel" aria-labelledby="login-tab">
                 <form id="loginForm" class="text-start">
                   <div class="mb-3">
-                    <label for="loginEmail" class="form-label">Email Address</label>
+                    <label for="loginEmail" class="form-label" data-translate="emailLabel">Email Address</label>
                     <input type="email" class="form-control" id="loginEmail" required>
                   </div>
                   <div class="mb-3">
-                    <label for="loginPassword" class="form-label">Password</label>
+                    <label for="loginPassword" class="form-label" data-translate="passwordLabel">Password</label>
                     <input type="password" class="form-control" id="loginPassword" required>
                   </div>
                   <div class="d-grid gap-2 mt-4">
-                    <button type="submit" class="btn btn-primary">Login</button>
+                    <button type="submit" class="btn btn-primary" data-translate="loginButton">Login</button>
                   </div>
 
                 </form>
@@ -87,7 +91,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-google me-2" viewBox="0 0 16 16">
                       <path d="M15.545 6.558a9.42 9.42 0 0 1 .139 1.626c0 2.434-.87 4.492-2.384 5.885h.002C11.978 15.292 10.158 16 8 16A8 8 0 1 1 8 0a7.689 7.689 0 0 1 5.352 2.082l-2.284 2.284A4.347 4.347 0 0 0 8 3.166c-2.087 0-3.86 1.408-4.492 3.304a4.792 4.792 0 0 0 0 3.063h.003c.635 1.893 2.405 3.301 4.492 3.301 1.078 0 2.004-.276 2.722-.764h-.003a3.702 3.702 0 0 0 1.599-2.431H8v-3.08h7.545z"/>
                     </svg>
-                    Sign in with Google
+                    <span data-translate="googleSignInBtn">Sign in with Google</span>
                   </button>
                 </div>
                 <div class="d-grid gap-2 mt-2">
@@ -96,7 +100,7 @@
                       <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
                       <path fill-rule="evenodd" d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm8-7a7 7 0 0 0-5.468 11.37C3.242 11.226 4.805 10 8 10s4.757 1.225 5.468 2.37A7 7 0 0 0 8 1z"/>
                     </svg>
-                    Login as Guest
+                    <span data-translate="guestSignInBtn">Login as Guest</span>
                   </button>
                 </div>
               </div>
@@ -106,20 +110,20 @@
               <div class="tab-pane fade" id="register" role="tabpanel" aria-labelledby="register-tab">
                 <form id="registerForm" class="text-start">
                   <div class="mb-3">
-                    <label for="registerEmail" class="form-label">Email Address</label>
+                    <label for="registerEmail" class="form-label" data-translate="emailLabel">Email Address</label>
                     <input type="email" class="form-control" id="registerEmail" required>
                   </div>
                   <div class="mb-3">
-                    <label for="registerPassword" class="form-label">Password</label>
+                    <label for="registerPassword" class="form-label" data-translate="passwordLabel">Password</label>
                     <input type="password" class="form-control" id="registerPassword" required minlength="6">
-                    <div class="form-text">Password must be at least 6 characters long</div>
+                    <div class="form-text" data-translate="passwordHint">Password must be at least 6 characters long</div>
                   </div>
                   <div class="mb-3">
-                    <label for="confirmPassword" class="form-label">Confirm Password</label>
+                    <label for="confirmPassword" class="form-label" data-translate="confirmPasswordLabel">Confirm Password</label>
                     <input type="password" class="form-control" id="confirmPassword" required>
                   </div>
                   <div class="d-grid gap-2 mt-4">
-                    <button type="submit" class="btn btn-primary">Register</button>
+                    <button type="submit" class="btn btn-primary" data-translate="registerButton">Register</button>
                   </div>
                   <div id="registerStatus" class="status-message"></div>
                 </form>
@@ -133,8 +137,142 @@
   
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
+    const translations = {
+      "en-US": {
+        "pageTitle": "EasyApply - Login/Register",
+        "title": "EasyApply",
+        "subtitle": "Please log in or register to continue using EasyApply",
+        "loginTab": "Login",
+        "registerTab": "Register",
+        "emailLabel": "Email Address",
+        "passwordLabel": "Password",
+        "loginButton": "Login",
+        "loginButtonLoading": "Logging in...",
+        "googleSignInBtn": "Sign in with Google",
+        "guestSignInBtn": "Login as Guest",
+        "passwordHint": "Password must be at least 6 characters long",
+        "confirmPasswordLabel": "Confirm Password",
+        "registerButton": "Register",
+        "registerButtonLoading": "Registering...",
+        "statusLoggingIn": "Logging in...",
+        "statusLoginSuccess": "Login successful! Redirecting...",
+        "statusCallbackMissing": "Callback URL not provided, cannot complete login process.",
+        "statusResendEmailBtn": "Resend Verification Email",
+        "statusResendEmailBtnLoading": "Sending...",
+        "statusResendInfo": "If you haven\'t received the email, you can try resending.",
+        "statusNewEmailSent": "A new verification email has been sent. Please check your email (including spam folder).",
+        "statusCannotIdentifyUserResend": "Could not identify current user to resend email. Please try logging in again. If the issue persists, contact support.",
+        "statusResendEmailFailed": "Failed to resend verification email: {errorMessage}",
+        "statusLoginFailedGeneral": "Login failed, please check your credentials or network connection.",
+        "statusIncorrectCredentials": "Incorrect email or password.",
+        "statusInvalidEmailFormat": "Invalid email format.",
+        "statusUserDisabled": "This account has been disabled.",
+        "statusLoginErrorDefault": "Error during login: {errorMessage}",
+        "statusGoogleRedirect": "Redirecting to Google Sign-In...",
+        "statusGoogleSignInSuccess": "Google Sign-In successful! Redirecting...",
+        "statusGoogleSignInCancelled": "Google Sign-In was cancelled or failed.",
+        "statusGooglePopupClosed": "Google Sign-In popup was closed before completion.",
+        "statusGooglePopupBlocked": "Google Sign-In popup was blocked by the browser. Please allow popups for this site.",
+        "statusGoogleAccountExists": "An account already exists with the same email address but different sign-in credentials. Sign in using a provider associated with this email address.",
+        "statusGoogleErrorDefault": "Google Sign-In error: {errorMessage}",
+        "statusGuestSigningIn": "Signing in as guest...",
+        "statusGuestSignInSuccess": "Guest login successful! Redirecting...",
+        "statusGuestCallbackMissing": "Callback URL not provided, cannot complete guest login.",
+        "statusGuestBackendFail": "Guest login failed on backend.",
+        "statusGuestErrorDefault": "Anonymous sign-in failed: {errorMessage}",
+        "statusPasswordsNoMatch": "Passwords do not match.",
+        "statusRegistering": "Registering...",
+        "statusRegisterSuccess": "Registration successful! Firebase will send a verification email. Please check your email and click the link to verify.",
+        "statusRegisterFail": "Registration failed: {errorMessage}",
+        "statusInitFailed": "System initialization failed, please refresh the page or try again later."
+      },
+      "zh-CN": {
+        "pageTitle": "EasyApply - 登录/注册",
+        "title": "EasyApply",
+        "subtitle": "请登录或注册以继续使用EasyApply",
+        "loginTab": "登录",
+        "registerTab": "注册",
+        "emailLabel": "电子邮箱",
+        "passwordLabel": "密码",
+        "loginButton": "登录",
+        "loginButtonLoading": "登录中...",
+        "googleSignInBtn": "使用Google登录",
+        "guestSignInBtn": "访客登录",
+        "passwordHint": "密码必须至少包含6个字符",
+        "confirmPasswordLabel": "确认密码",
+        "registerButton": "注册",
+        "registerButtonLoading": "注册中...",
+        "statusLoggingIn": "正在登录...",
+        "statusLoginSuccess": "登录成功！正在重定向...",
+        "statusCallbackMissing": "未提供回调地址，无法完成登录流程。",
+        "statusResendEmailBtn": "重新发送验证邮件",
+        "statusResendEmailBtnLoading": "发送中...",
+        "statusResendInfo": "如果您没有收到邮件，可以尝试重新发送。",
+        "statusNewEmailSent": "新的验证邮件已发送。请检查您的邮箱（包括垃圾邮件文件夹）。",
+        "statusCannotIdentifyUserResend": "无法确定当前用户以重新发送邮件。请尝试重新登录，如果问题持续，请联系支持。",
+        "statusResendEmailFailed": "重新发送验证邮件失败: {errorMessage}",
+        "statusLoginFailedGeneral": "登录失败，请检查您的凭据或网络连接。",
+        "statusIncorrectCredentials": "邮箱或密码错误。",
+        "statusInvalidEmailFormat": "邮箱格式不正确。",
+        "statusUserDisabled": "该账户已被禁用。",
+        "statusLoginErrorDefault": "登录时发生错误: {errorMessage}",
+        "statusGoogleRedirect": "正在重定向到Google登录...",
+        "statusGoogleSignInSuccess": "Google登录成功！正在重定向...",
+        "statusGoogleSignInCancelled": "Google登录已取消或失败。",
+        "statusGooglePopupClosed": "Google登录弹出窗口在完成前已关闭。",
+        "statusGooglePopupBlocked": "Google登录弹出窗口被浏览器阻止。请允许此站点的弹出窗口。",
+        "statusGoogleAccountExists": "具有相同电子邮件地址但不同登录凭据的帐户已存在。请使用与此电子邮件地址关联的提供商登录。",
+        "statusGoogleErrorDefault": "Google登录错误: {errorMessage}",
+        "statusGuestSigningIn": "正以访客身份登录...",
+        "statusGuestSignInSuccess": "访客登录成功！正在重定向...",
+        "statusGuestCallbackMissing": "未提供回调地址，无法完成访客登录。",
+        "statusGuestBackendFail": "访客登录在后端失败。",
+        "statusGuestErrorDefault": "匿名登录失败: {errorMessage}",
+        "statusPasswordsNoMatch": "两次输入的密码不一致。",
+        "statusRegistering": "正在注册...",
+        "statusRegisterSuccess": "注册成功！Firebase将发送验证邮件。请检查邮箱并点击链接验证。",
+        "statusRegisterFail": "注册失败: {errorMessage}",
+        "statusInitFailed": "系统初始化失败，请刷新页面或稍后再试。"
+      }
+    };
+
+    function getQueryParam(param) {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(param);
+    }
+
+    let currentLang = getQueryParam('lang') || 'en-US';
+    if (!translations[currentLang]) {
+        console.warn(`Language "${currentLang}" not supported, defaulting to en-US.`);
+        currentLang = 'en-US'; // Default to English if lang not found
+    }
+
+    function T(key, params = {}) {
+        let text = translations[currentLang][key] || key; // Fallback to key if translation not found
+        for (const param in params) {
+            text = text.replace(new RegExp(`{${param}}`, 'g'), params[param]);
+        }
+        return text;
+    }
+
+    function updatePageText() {
+        document.title = T("pageTitle");
+        document.querySelectorAll('[data-translate]').forEach(element => {
+            const key = element.getAttribute('data-translate');
+            if (key) {
+                element.textContent = T(key);
+            }
+        });
+        // Update dynamic button texts if needed, or handle them within their respective event handlers
+        // Example for a button that might not have data-translate initially:
+        // const loginButton = loginForm.querySelector('button[type="submit"]');
+        // if (loginButton) loginButton.textContent = T('loginButton');
+    }
+
     // Function to initialize Firebase and set up event listeners
     function initializeAppAndAuth() {
+      updatePageText(); // Update text on initial load
+
       // Firebase configuration
       const firebaseConfig = {
         apiKey: "AIzaSyAeHptX0vuZVy1Oos_LyOSjtoVTU4b6m9s",
@@ -169,7 +307,7 @@
             const loginButton = loginForm.querySelector('button[type="submit"]');
             const originalButtonText = loginButton.innerHTML;
             loginButton.disabled = true;
-            loginButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Logging in...';
+            loginButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ${T("loginButtonLoading")}`;
             
             console.log("Login form submitted, preventDefault called."); 
             
@@ -177,7 +315,7 @@
             const password = document.getElementById('loginPassword').value;
             const statusEl = document.getElementById('loginStatus');
             
-            statusEl.innerHTML = '<div class="alert alert-info">Logging in...</div>';
+            statusEl.innerHTML = `<div class="alert alert-info">${T("statusLoggingIn")}</div>`;
             console.log("Attempting Firebase sign-in with email:", email);
             
             try {
@@ -195,37 +333,37 @@
               const data = await response.json();
               
               if (data.success) {
-                statusEl.innerHTML = '<div class="alert alert-success">Login successful! Redirecting...</div>';
+                statusEl.innerHTML = `<div class="alert alert-success">${T("statusLoginSuccess")}</div>`;
                 const callbackUrl = getCallbackUrl();
                 if (callbackUrl) {
                   window.location.href = `/auth/callback?user_id=${data.user_id}&api_key=${data.api_key}`;
                 } else {
-                  statusEl.innerHTML = '<div class="alert alert-warning">Callback URL not provided, cannot complete login process.</div>';
+                  statusEl.innerHTML = `<div class="alert alert-warning">${T("statusCallbackMissing")}</div>`;
                 }
               } else {
                 if (data.email_verified === false) {
-                  let resendButtonHtml = `<button id="resendVerificationEmailBtn" class="btn btn-warning btn-sm mt-2">Resend Verification Email</button>`;
-                  statusEl.innerHTML = `<div class="alert alert-danger">${data.message}<br>If you haven\'t received the email, you can try resending.</div>${resendButtonHtml}`;
+                  let resendButtonHtml = `<button id="resendVerificationEmailBtn" class="btn btn-warning btn-sm mt-2">${T("statusResendEmailBtn")}</button>`;
+                  statusEl.innerHTML = `<div class="alert alert-danger">${data.message}<br>${T("statusResendInfo")}</div>${resendButtonHtml}`;
                   
                   document.getElementById('resendVerificationEmailBtn').addEventListener('click', async (event) => {
                     event.preventDefault();
                     event.stopPropagation();
                     const resendButton = event.target;
-                    const originalResendButtonText = resendButton.innerHTML;
+                    const originalResendButtonText = T("statusResendEmailBtn");
                     resendButton.disabled = true;
-                    resendButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Sending...';
+                    resendButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ${T("statusResendEmailBtnLoading")}`;
 
                     try {
                       const user = auth.currentUser;
                       if (user) {
                         await user.sendEmailVerification();
-                        statusEl.innerHTML = '<div class="alert alert-info">A new verification email has been sent. Please check your email (including spam folder).</div>';
+                        statusEl.innerHTML = `<div class="alert alert-info">${T("statusNewEmailSent")}</div>`;
                       } else {
-                        statusEl.innerHTML = '<div class="alert alert-danger">Could not identify current user to resend email. Please try logging in again. If the issue persists, contact support.</div>';
+                        statusEl.innerHTML = `<div class="alert alert-danger">${T("statusCannotIdentifyUserResend")}</div>`;
                       }
                     } catch (err) {
                       console.error("Error resending verification email:", err);
-                      statusEl.innerHTML = `<div class="alert alert-danger">Failed to resend verification email: ${err.message}</div>`;
+                      statusEl.innerHTML = `<div class="alert alert-danger">${T("statusResendEmailFailed", {errorMessage: err.message})}</div>`;
                     } finally {
                         if(document.getElementById('resendVerificationEmailBtn')) {
                            resendButton.disabled = false;
@@ -236,34 +374,34 @@
                     }
                   });
                 } else {
-                  statusEl.innerHTML = `<div class="alert alert-danger">${data.message || 'Login failed, please check your credentials or network connection.'}</div>`;
+                  statusEl.innerHTML = `<div class="alert alert-danger">${data.message || T("statusLoginFailedGeneral")}</div>`;
                 }
               }
             } catch (error) {
               console.error('登录错误:', error);
-              let errorMessage = 'Login failed, please try again later.';
+              let errorMessage = T("statusLoginFailedGeneral");
               if (error.code) {
                 switch (error.code) {
                   case 'auth/user-not-found':
                   case 'auth/wrong-password':
                   case 'auth/invalid-credential':
                   case 'auth/invalid-login-credentials': 
-                    errorMessage = 'Incorrect email or password.';
+                    errorMessage = T("statusIncorrectCredentials");
                     break;
                   case 'auth/invalid-email':
-                    errorMessage = 'Invalid email format.';
+                    errorMessage = T("statusInvalidEmailFormat");
                     break;
                   case 'auth/user-disabled':
-                    errorMessage = 'This account has been disabled.';
+                    errorMessage = T("statusUserDisabled");
                     break;
                   default:
-                    errorMessage = `Error during login: ${error.message}`;
+                    errorMessage = T("statusLoginErrorDefault", {errorMessage: error.message});
                 }
               }
               statusEl.innerHTML = `<div class="alert alert-danger">${errorMessage}</div>`;
             }
             loginButton.disabled = false;
-            loginButton.innerHTML = originalButtonText;
+            loginButton.innerHTML = T("loginButton");
           });
         } else {
             console.error("Login form not found");
@@ -273,12 +411,12 @@
         const googleSignInBtn = document.getElementById('googleSignInBtn');
         if (googleSignInBtn) {
           googleSignInBtn.addEventListener('click', async () => {
-            const originalButtonText = googleSignInBtn.innerHTML;
+            const originalButtonText = googleSignInBtn.querySelector('span').textContent;
             googleSignInBtn.disabled = true;
-            googleSignInBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Signing in...';
+            googleSignInBtn.querySelector('span').textContent = T("loginButtonLoading");
 
             const statusEl = document.getElementById('loginStatus'); 
-            statusEl.innerHTML = '<div class="alert alert-info">Redirecting to Google Sign-In...</div>';
+            statusEl.innerHTML = `<div class="alert alert-info">${T("statusGoogleRedirect")}</div>`;
             try {
               const result = await auth.signInWithPopup(googleProvider);
               // This gives you a Google Access Token. You can use it to access the Google API.
@@ -298,49 +436,46 @@
                 const data = await response.json();
 
                 if (data.success) {
-                  statusEl.innerHTML = '<div class="alert alert-success">Google Sign-In successful! Redirecting...</div>';
+                  statusEl.innerHTML = `<div class="alert alert-success">${T("statusGoogleSignInSuccess")}</div>`;
                   const callbackUrl = getCallbackUrl();
                   if (callbackUrl) {
                     window.location.href = `/auth/callback?user_id=${data.user_id}&api_key=${data.api_key}`;
                   } else {
-                    statusEl.innerHTML = '<div class="alert alert-warning">Callback URL not provided, cannot complete login process.</div>';
+                    statusEl.innerHTML = `<div class="alert alert-warning">${T("statusCallbackMissing")}</div>`;
                   }
                 } else {
-                  // Handle cases like email not verified if your backend enforces that for Google sign-ins too,
-                  // or other backend errors.
-                   if (data.email_verified === false) { // Though for Google, email is typically pre-verified
-                        statusEl.innerHTML = `<div class="alert alert-danger">${data.message}<br>Please ensure your Google account email is accessible.</div>`;
+                  if (data.email_verified === false) {
+                        statusEl.innerHTML = `<div class="alert alert-danger">${data.message}<br>${T("statusResendInfo")}</div>`;
                     } else {
-                        statusEl.innerHTML = `<div class="alert alert-danger">${data.message || 'Google Sign-In failed on backend.'}</div>`;
+                        statusEl.innerHTML = `<div class="alert alert-danger">${data.message || T("statusGoogleBackendFail", {errorMessage: data.message})}</div>`;
                     }
                 }
               } else {
-                statusEl.innerHTML = '<div class="alert alert-warning">Google Sign-In was cancelled or failed.</div>';
+                statusEl.innerHTML = `<div class="alert alert-warning">${T("statusGoogleSignInCancelled")}</div>`;
               }
             } catch (error) {
               console.error("Google Sign-In Error:", error);
-              let errorMessage = 'Google Sign-In failed. Please try again.';
+              let errorMessage = T("statusGoogleErrorDefault", {errorMessage: "Unknown error"});
               if (error.code) {
                 switch (error.code) {
                   case 'auth/popup-closed-by-user':
-                    errorMessage = 'Google Sign-In popup was closed before completion.';
+                    errorMessage = T("statusGooglePopupClosed");
                     break;
                   case 'auth/cancelled-popup-request':
                   case 'auth/popup-blocked':
-                     errorMessage = 'Google Sign-In popup was blocked by the browser. Please allow popups for this site.';
+                     errorMessage = T("statusGooglePopupBlocked");
                      break;
                   case 'auth/account-exists-with-different-credential':
-                    errorMessage = 'An account already exists with the same email address but different sign-in credentials. Sign in using a provider associated with this email address.';
+                    errorMessage = T("statusGoogleAccountExists");
                     break;
-                  // Add other specific error codes if needed
                   default:
-                    errorMessage = `Google Sign-In error: ${error.message}`;
+                    errorMessage = T("statusGoogleErrorDefault", {errorMessage: error.message});
                 }
               }
               statusEl.innerHTML = `<div class="alert alert-danger">${errorMessage}</div>`;
             }
             googleSignInBtn.disabled = false;
-            googleSignInBtn.innerHTML = originalButtonText;
+            googleSignInBtn.querySelector('span').textContent = originalButtonText;
           });
         } else {
             console.error("Google Sign-In button not found");
@@ -350,12 +485,13 @@
         const guestSignInBtn = document.getElementById('guestSignInBtn');
         if (guestSignInBtn) {
             guestSignInBtn.addEventListener('click', async () => {
-                const originalButtonText = guestSignInBtn.innerHTML;
+                const originalButtonSpan = guestSignInBtn.querySelector('span');
+                const originalButtonText = originalButtonSpan.textContent;
                 guestSignInBtn.disabled = true;
-                guestSignInBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Entering as Guest...';
+                originalButtonSpan.textContent = T("loginButtonLoading");
 
                 const statusEl = document.getElementById('loginStatus');
-                statusEl.innerHTML = '<div class="alert alert-info">Signing in as guest...</div>';
+                statusEl.innerHTML = `<div class="alert alert-info">${T("statusGuestSigningIn")}</div>`;
 
                 try {
                     const userCredential = await auth.signInAnonymously();
@@ -371,23 +507,23 @@
                         const data = await response.json();
 
                         if (data.success) {
-                            statusEl.innerHTML = '<div class="alert alert-success">Guest login successful! Redirecting...</div>';
+                            statusEl.innerHTML = `<div class="alert alert-success">${T("statusGuestSignInSuccess")}</div>`;
                             const callbackUrl = getCallbackUrl();
                             if (callbackUrl) {
                                 window.location.href = `/auth/callback?user_id=${data.user_id}&api_key=${data.api_key}`;
                             } else {
-                                statusEl.innerHTML = '<div class="alert alert-warning">Callback URL not provided, cannot complete guest login.</div>';
+                                statusEl.innerHTML = `<div class="alert alert-warning">${T("statusGuestCallbackMissing")}</div>`;
                             }
                         } else {
-                            statusEl.innerHTML = `<div class="alert alert-danger">${data.message || 'Guest login failed on backend.'}</div>`;
+                            statusEl.innerHTML = `<div class="alert alert-danger">${data.message || T("statusGuestBackendFail")}</div>`;
                         }
                     }
                 } catch (error) {
                     console.error("Anonymous Sign-In Error:", error);
-                    statusEl.innerHTML = `<div class="alert alert-danger">Anonymous sign-in failed: ${error.message}</div>`;
+                    statusEl.innerHTML = `<div class="alert alert-danger">${T("statusGuestErrorDefault", {errorMessage: error.message})}</div>`;
                 }
                 guestSignInBtn.disabled = false;
-                guestSignInBtn.innerHTML = originalButtonText;
+                originalButtonSpan.textContent = originalButtonText;
             });
         }
         
@@ -399,7 +535,7 @@
             const registerButton = registerForm.querySelector('button[type="submit"]');
             const originalButtonText = registerButton.innerHTML;
             registerButton.disabled = true;
-            registerButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Registering...';
+            registerButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ${T("registerButtonLoading")}`;
             
             const email = document.getElementById('registerEmail').value;
             const password = document.getElementById('registerPassword').value;
@@ -407,11 +543,13 @@
             const statusEl = document.getElementById('registerStatus');
             
             if (password !== confirmPassword) {
-              statusEl.innerHTML = '<div class="alert alert-danger">Passwords do not match.</div>';
+              statusEl.innerHTML = `<div class="alert alert-danger">${T("statusPasswordsNoMatch")}</div>`;
+              registerButton.disabled = false;
+              registerButton.innerHTML = T("registerButton");
               return;
             }
             
-            statusEl.innerHTML = '<div class="alert alert-info">Registering...</div>';
+            statusEl.innerHTML = `<div class="alert alert-info">${T("statusRegistering")}</div>`;
             
             try {
               const response = await fetch('/api/register', {
@@ -428,16 +566,16 @@
                 if (user) {
                   await user.sendEmailVerification();
                 }
-                statusEl.innerHTML = '<div class="alert alert-success">Registration successful! Firebase will send a verification email. Please check your email and click the link to verify.</div>';
+                statusEl.innerHTML = `<div class="alert alert-success">${T("statusRegisterSuccess")}</div>`;
               } else {
                 statusEl.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
               }
             } catch (error) {
               console.error('注册错误:', error);
-              statusEl.innerHTML = `<div class="alert alert-danger">Registration failed: ${error.message}</div>`;
+              statusEl.innerHTML = `<div class="alert alert-danger">${T("statusRegisterFail", {errorMessage: error.message})}</div>`;
             }
             registerButton.disabled = false;
-            registerButton.innerHTML = originalButtonText;
+            registerButton.innerHTML = T("registerButton");
           });
         } else {
             console.error("Register form not found");
@@ -445,11 +583,10 @@
 
       } catch (e) {
         console.error("Firebase initialization failed:", e);
-        // Display a user-friendly message if Firebase fails to initialize
         const loginStatus = document.getElementById('loginStatus');
-        if (loginStatus) loginStatus.innerHTML = '<div class="alert alert-danger">System initialization failed, please refresh the page or try again later.</div>';
+        if (loginStatus) loginStatus.innerHTML = `<div class="alert alert-danger">${T("statusInitFailed")}</div>`;
         const registerStatus = document.getElementById('registerStatus');
-        if (registerStatus) registerStatus.innerHTML = '<div class="alert alert-danger">System initialization failed, please refresh the page or try again later.</div>';
+        if (registerStatus) registerStatus.innerHTML = `<div class="alert alert-danger">${T("statusInitFailed")}</div>`;
       }
     }
 
