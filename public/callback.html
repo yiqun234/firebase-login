@@ -43,13 +43,13 @@
               </svg>
             </div>
             
-            <h3 class="mb-3">Authentication Successful</h3>
-            <p id="statusMessage" class="text-muted mb-4">Your login authentication is complete, please wait...</p>
+            <h3 class="mb-3" data-translate="header">Authentication Successful</h3>
+            <p id="statusMessage" class="text-muted mb-4" data-translate="statusMessageInitial">Your login authentication is complete, please wait...</p>
             
             <div class="d-none" id="apiKeySection">
               <!-- <p class="text-start mb-2">Your API Key:</p>
               <div class="api-key text-start" id="apiKeyDisplay"></div> -->
-              <div class="mt-3 text-muted small">The information above has been automatically sent to the EasyApply application. You can close this window and return to the application.</div>
+              <div class="mt-3 text-muted small" data-translate="sentToAppInfo">The information above has been automatically sent to the EasyApply application. You can close this window and return to the application.</div>
             </div>
             
             <div class="alert alert-danger d-none mt-4" id="errorMessage"></div>
@@ -60,25 +60,90 @@
   </div>
   
   <script>
+    const translations = {
+        "en-US": {
+            "pageTitle": "Authentication Complete - EasyApply",
+            "header": "Authentication Successful",
+            "statusMessageInitial": "Your login authentication is complete, please wait...",
+            "sentToAppInfo": "The information above has been automatically sent to the EasyApply application. You can close this window and return to the application.",
+            "errorIncompleteData": "Error: Authentication information from URL is incomplete.",
+            "errorRetrieveFailed": "Failed to retrieve User ID or API Key from URL. Please try logging in again.",
+            "statusSentSuccess": "Authentication information successfully sent to the application!",
+            "statusSendToAppError": "Error sending authentication information to the application server.",
+            "errorSendToAppFailedGeneral": "Failed to send authentication information to the application. Please try again or contact support.",
+            "statusNetworkError": "Network Error: Unable to connect to the application server.",
+            "errorNetworkErrorDetail": "Could not send authentication details due to a network issue. Please check your connection and that the EasyApply application is running.",
+            "statusLocalError": "Local Error: A problem occurred while trying to send authentication details.",
+            "errorLocalErrorDetail": "An unexpected error occurred. Please close this window and attempt to log in again through the EasyApply application."
+        },
+        "zh-CN": {
+            "pageTitle": "认证完成 - EasyApply",
+            "header": "认证成功",
+            "statusMessageInitial": "您的登录认证已完成，请稍候...",
+            "sentToAppInfo": "以上信息已自动发送到EasyApply应用程序。您可以关闭此窗口并返回应用程序。",
+            "errorIncompleteData": "错误：来自URL的认证信息不完整。",
+            "errorRetrieveFailed": "未能从URL检索到用户ID或API密钥。请尝试重新登录。",
+            "statusSentSuccess": "认证信息已成功发送到应用程序！",
+            "statusSendToAppError": "向应用服务器发送认证信息时出错。",
+            "errorSendToAppFailedGeneral": "未能将认证信息发送到应用程序。请重试或联系支持。",
+            "statusNetworkError": "网络错误：无法连接到应用服务器。",
+            "errorNetworkErrorDetail": "由于网络问题，无法发送认证详细信息。请检查您的连接并确保EasyApply应用程序正在运行。",
+            "statusLocalError": "本地错误：尝试发送认证详细信息时发生问题。",
+            "errorLocalErrorDetail": "发生意外错误。请关闭此窗口并通过EasyApply应用程序尝试重新登录。"
+        }
+    };
+
+    function getQueryParam(param) {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(param);
+    }
+
+    let currentLang = getQueryParam('lang') || 'en-US';
+    if (!translations[currentLang]) {
+        console.warn(`Language "${currentLang}" not supported, defaulting to en-US.`);
+        currentLang = 'en-US';
+    }
+
+    function T(key, params = {}) {
+        let text = (translations[currentLang] && translations[currentLang][key]) || (translations['en-US'] && translations['en-US'][key]) || key;
+        for (const param in params) {
+            text = text.replace(new RegExp(`{${param}}`, 'g'), params[param]);
+        }
+        return text;
+    }
+
+    function updatePageText() {
+        document.title = T("pageTitle");
+        document.querySelectorAll('[data-translate]').forEach(element => {
+            const key = element.getAttribute('data-translate');
+            if (key) {
+                element.textContent = T(key);
+            }
+        });
+    }
+
     document.addEventListener("DOMContentLoaded", function() {
+      updatePageText(); // Initialize text based on language
+
       const params = new URLSearchParams(window.location.search);
       const userId = params.get('user_id');
       const apiKey = params.get('api_key');
       
+      const statusMessageEl = document.getElementById('statusMessage');
+      const errorMessageEl = document.getElementById('errorMessage');
+
       if (!userId || !apiKey) {
-        document.getElementById('statusMessage').innerHTML = 'Error: Authentication information incomplete';
-        document.getElementById('errorMessage').innerHTML = 'Failed to retrieve User ID or API Key. Please log in or register again.';
-        document.getElementById('errorMessage').classList.remove('d-none');
+        statusMessageEl.textContent = T('errorIncompleteData');
+        errorMessageEl.textContent = T('errorRetrieveFailed');
+        errorMessageEl.classList.remove('d-none');
         return;
       }
       
-      // 显示API密钥
-      // document.getElementById('apiKeyDisplay').textContent = apiKey;
+      // API Key display is commented out, so no direct update needed for that element.
       document.getElementById('apiKeySection').classList.remove('d-none');
       
-      // 尝试发送回本地服务器
+      // Attempt to send back to local server
       try {
-        // 通过fetch向本地认证服务器发送认证信息
         fetch('http://localhost:5000/auth/callback', {
           method: 'POST',
           headers: {
@@ -92,24 +157,24 @@
         .then(response => response.json())
         .then(data => {
           if (data.success) {
-            document.getElementById('statusMessage').innerHTML = 'Authentication information successfully sent to the application!';
+            statusMessageEl.textContent = T('statusSentSuccess');
           } else {
-            document.getElementById('statusMessage').innerHTML = 'Error sending authentication information to the application';
-            document.getElementById('errorMessage').innerHTML = data.message || 'Failed to send authentication information to the application, please copy the API key manually';
-            document.getElementById('errorMessage').classList.remove('d-none');
+            statusMessageEl.textContent = T('statusSendToAppError');
+            errorMessageEl.textContent = data.message || T('errorSendToAppFailedGeneral');
+            errorMessageEl.classList.remove('d-none');
           }
         })
         .catch(error => {
-          console.error('发送到本地服务器错误:', error);
-          document.getElementById('statusMessage').innerHTML = 'Unable to connect to the application';
-          document.getElementById('errorMessage').innerHTML = 'Unable to send authentication information to the application. Please manually copy your API key and enter it in the application.';
-          document.getElementById('errorMessage').classList.remove('d-none');
+          console.error('Error sending to local server:', error);
+          statusMessageEl.textContent = T('statusNetworkError');
+          errorMessageEl.textContent = T('errorNetworkErrorDetail');
+          errorMessageEl.classList.remove('d-none');
         });
       } catch (error) {
-        console.error('发送错误:', error);
-        document.getElementById('statusMessage').innerHTML = 'Unable to send authentication information to the application';
-        document.getElementById('errorMessage').innerHTML = 'Please manually copy the API key above into the application';
-        document.getElementById('errorMessage').classList.remove('d-none');
+        console.error('Send error:', error);
+        statusMessageEl.textContent = T('statusLocalError');
+        errorMessageEl.textContent = T('errorLocalErrorDetail');
+        errorMessageEl.classList.remove('d-none');
       }
     });
   </script>

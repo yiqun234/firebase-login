@@ -336,7 +336,7 @@
                 statusEl.innerHTML = `<div class="alert alert-success">${T("statusLoginSuccess")}</div>`;
                 const callbackUrl = getCallbackUrl();
                 if (callbackUrl) {
-                  window.location.href = `/auth/callback?user_id=${data.user_id}&api_key=${data.api_key}`;
+                  window.location.href = `/auth/callback?user_id=${data.user_id}&api_key=${data.api_key}&lang=${currentLang}`;
                 } else {
                   statusEl.innerHTML = `<div class="alert alert-warning">${T("statusCallbackMissing")}</div>`;
                 }
@@ -439,7 +439,7 @@
                   statusEl.innerHTML = `<div class="alert alert-success">${T("statusGoogleSignInSuccess")}</div>`;
                   const callbackUrl = getCallbackUrl();
                   if (callbackUrl) {
-                    window.location.href = `/auth/callback?user_id=${data.user_id}&api_key=${data.api_key}`;
+                    window.location.href = `/auth/callback?user_id=${data.user_id}&api_key=${data.api_key}&lang=${currentLang}`;
                   } else {
                     statusEl.innerHTML = `<div class="alert alert-warning">${T("statusCallbackMissing")}</div>`;
                   }
@@ -510,7 +510,7 @@
                             statusEl.innerHTML = `<div class="alert alert-success">${T("statusGuestSignInSuccess")}</div>`;
                             const callbackUrl = getCallbackUrl();
                             if (callbackUrl) {
-                                window.location.href = `/auth/callback?user_id=${data.user_id}&api_key=${data.api_key}`;
+                                window.location.href = `/auth/callback?user_id=${data.user_id}&api_key=${data.api_key}&lang=${currentLang}`;
                             } else {
                                 statusEl.innerHTML = `<div class="alert alert-warning">${T("statusGuestCallbackMissing")}</div>`;
                             }
