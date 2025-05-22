@@ -6,6 +6,7 @@ const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 const jwt = require('jsonwebtoken');
 const { OpenAI } = require('openai');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 // Import Firebase Admin SDK if using Firebase
@@ -86,6 +87,14 @@ app.get('/auth/callback', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'callback.html'));
 });
 
+// 创建Nodemailer传输器
+const transporter = nodemailer.createTransport({
+  service: 'gmail',  // 注意：使用Gmail需要开启"不太安全的应用"访问权限或使用应用密码
+  auth: {
+    user: process.env.EMAIL_USER || '',  // 从环境变量获取或使用默认值
+    pass: process.env.EMAIL_PASS || ''          // 从环境变量获取或使用默认值
+  }
+});
 
 // Registration API
 app.post('/api/register', async (req, res) => {
@@ -753,6 +762,40 @@ Output strictly in the user-specified JSON structure.`;
     console.error('Extract-from-resume error:', error);
     res.status(500).json({ error: error.message || 'Server error' });
   }
+});
+
+// 处理预订请求的API端点
+app.post('/api/preorder', (req, res) => {
+  const { name, email, company } = req.body;
+  
+  if (!name || !email) {
+    return res.status(400).json({ success: false, message: 'Name and email are required' });
+  }
+  
+  // 邮件内容
+  const mailOptions = {
+    from: process.env.EMAIL_USER || '',  // 发件人
+    to: process.env.RECIPIENT_EMAIL || 'yeequn.xu@gmail.com', // 收件人
+    subject: 'New Workday Version Pre-order',  // 邮件主题
+    html: `
+      <h2>New Pre-order for Workday Version</h2>
+      <p><strong>Name:</strong> ${name}</p>
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Company:</strong> ${company || 'Not provided'}</p>
+      <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+    `
+  };
+  
+  // 发送邮件
+  transporter.sendMail(mailOptions, (error, info) => {
+    if (error) {
+      console.error('Email sending error:', error);
+      return res.status(500).json({ success: false, message: 'Failed to send email' });
+    }
+    
+    console.log('Email sent:', info.response);
+    res.json({ success: true, message: 'Pre-order information received' });
+  });
 });
 
 // Start server
