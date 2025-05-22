@@ -403,7 +403,7 @@ app.post('/api/verify-key', async (req, res) => {
 app.post('/api/evaluate-job-fit', verifyApiKeyMiddleware, async (req, res) => {
   try {
     // Parse request parameters
-    const { context, job_title, job_description, debug, openai_api_key, systemPrompt: customSystemPrompt } = req.body;
+    const { context, job_title, job_description, debug, openai_api_key, system_prompt } = req.body;
     
     // Validate required parameters
     if (!job_title || !job_description) {
@@ -426,7 +426,7 @@ app.post('/api/evaluate-job-fit', verifyApiKeyMiddleware, async (req, res) => {
     const openaiClient = new OpenAI({ apiKey });
     
     // Build system prompt - use custom one if provided, otherwise use default
-    let systemPrompt = customSystemPrompt || `You are evaluating job fit for technical roles. 
+    let systemPrompt = system_prompt || `You are evaluating job fit for technical roles. 
       Recommend APPLY if:
       - Candidate meets 65 percent of the core requirements
       - Experience gap is 2 years or less
