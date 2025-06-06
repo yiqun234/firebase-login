@@ -694,7 +694,11 @@ Output strictly in the user-specified JSON structure.`;
       userPrompt += buildFieldPrompt('personal_info', `Personal Info: ${piInstructions}`);
     }
     if (options.includes('eeo')) {
-      let eeoInstructions = 'For gender, ethnicity, veteran status, etc., only extract if explicitly mentioned, otherwise provide reasonable inference. For veteran and disability fields, Please use the option that best applies.';
+      let eeoInstructions = buildFieldPrompt(
+        'For gender, ethnicity, veteran status, etc., only extract if explicitly mentioned, otherwise provide reasonable inference.',
+        metadata?.eeo?.label ? ` For the answer value, please refer to the preset option ${metadata.eeo.label}, ` : 'For veteran and disability fields, use lowercase "yes" or "no".',
+      );
+
       if (metadata?.eeo?.fields) {
         for (const key in metadata.eeo.fields) {
           if (metadata.eeo.fields[key].options && metadata.eeo.fields[key].options.length > 0) {
