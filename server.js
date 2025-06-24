@@ -702,7 +702,7 @@ Output strictly in the user-specified JSON structure.`;
       if (metadata?.eeo?.fields) {
         for (const key in metadata.eeo.fields) {
           if (metadata.eeo.fields[key].options && metadata.eeo.fields[key].options.length > 0) {
-            eeoInstructions += ` For ${metadata.eeo.fields[key].label || key}, select from options [${metadata.eeo.fields[key].options.join(', ')}].`;
+            eeoInstructions += ` For race, gender, disability, and veteran, you should prioritize finding or inferring the most appropriate option from the options. The priority for those you do not want to disclose should always be placed last.For ${metadata.eeo.fields[key].label || key}, select from options [${metadata.eeo.fields[key].options.join(', ')}].`;
           }
         }
       }
