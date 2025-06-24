@@ -694,19 +694,30 @@ Output strictly in the user-specified JSON structure.`;
       userPrompt += buildFieldPrompt('personal_info', `Personal Info: ${piInstructions}`);
     }
     if (options.includes('eeo')) {
-      let eeoInstructions = buildFieldPrompt(
-        'For gender, ethnicity, veteran status, etc., only extract if explicitly mentioned, otherwise provide reasonable inference.',
-        metadata?.eeo?.label ? ` For the answer value, please refer to the preset option ${metadata.eeo.label}, ` : 'For veteran and disability fields, use lowercase "yes" or "no".',
-      );
-
+      let eeoFinalInstructions = 'For EEO information, analyze the entire resume to infer the most accurate option for each field.';
+      
       if (metadata?.eeo?.fields) {
         for (const key in metadata.eeo.fields) {
-          if (metadata.eeo.fields[key].options && metadata.eeo.fields[key].options.length > 0) {
-            eeoInstructions += ` For race, gender, disability, and veteran, you should prioritize finding or inferring the most appropriate option from the options. The priority for those you do not want to disclose should always be placed last.For ${metadata.eeo.fields[key].label || key}, select from options [${metadata.eeo.fields[key].options.join(', ')}].`;
+          const fieldData = metadata.eeo.fields[key];
+          if (fieldData.options && fieldData.options.length > 0) {
+            const fieldLabel = fieldData.label || key;
+            const optionsString = `["${fieldData.options.join('", "')}"]`;
+            
+            const declineOption = fieldData.options.find(opt => 
+              opt.toLowerCase().includes('decline') || 
+              opt.toLowerCase().includes('do not wish') ||
+              opt.toLowerCase().includes('prefer not')
+            );
+
+            let instruction = ` For "${fieldLabel}", you must select from ${optionsString}.`;
+            if (declineOption) {
+              instruction += ` You should intelligently infer the correct value from the resume content. Only choose "${declineOption}" as an absolute last resort if no relevant information can be found anywhere in the resume.`;
+            }
+            eeoFinalInstructions += ` ${instruction}`;
           }
         }
       }
-      userPrompt += buildFieldPrompt('eeo', `Diversity Info: ${eeoInstructions}`);
+      userPrompt += buildFieldPrompt('eeo', 'Diversity Info:', eeoFinalInstructions);
     }
     if (options.includes('salary')) {
       userPrompt += buildFieldPrompt('salary', 'Expected Salary: If mentioned, extract the value and period (annual/monthly/hourly).');
