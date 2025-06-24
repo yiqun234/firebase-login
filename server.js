@@ -687,9 +687,9 @@ Output strictly in the user-specified JSON structure.`;
       );
     }
     if (options.includes('personal_info')) {
-      let piInstructions = 'Extract name, phone, email, address, country/region, etc. For country_code, use standard two-letter codes (e.g., US, CN), not full format. The system will convert to full format.';
+      let piInstructions = 'Extract name, phone, email, address, country/region, etc.';
       if (metadata?.personal_info?.fields?.country_code?.options) {
-        piInstructions += ` For country code, the system will match the full format from the preset options of ${metadata.personal_info.fields.country_code.label || 'country_code'}.`;
+        piInstructions += ` please mainly select from these preset options: [${metadata.personal_info.fields.country_code.options.join(', ')}].`;
       }
       userPrompt += buildFieldPrompt('personal_info', `Personal Info: ${piInstructions}`);
     }
