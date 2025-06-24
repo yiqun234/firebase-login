@@ -689,7 +689,7 @@ Output strictly in the user-specified JSON structure.`;
     if (options.includes('personal_info')) {
       let piInstructions = 'Extract name, phone, email, address, country/region, etc.';
       if (metadata?.personal_info?.fields?.country_code?.options) {
-        piInstructions += ` please mainly select from these preset options: [${metadata.personal_info.fields.country_code.options.join(', ')}].`;
+        piInstructions += ` For country_code, please use the full matching option, be sure to match the option: [${metadata.personal_info.fields.country_code.options.join(', ')}].`;
       }
       userPrompt += buildFieldPrompt('personal_info', `Personal Info: ${piInstructions}`);
     }
